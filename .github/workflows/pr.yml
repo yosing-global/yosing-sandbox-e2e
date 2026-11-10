@@ -1,6 +1,6 @@
 name: pr
 
-# このリポジトリの PR：静的チェックだけを動かす（AWS にはつながない。E2E は流さない）
+# このリポジトリの PR：静的チェックと support/ の単体テストだけを動かす（AWS にはつながない。E2E は流さない）
 #   整形の確認・ESLint・型チェック・テストの一覧（設定とテストのファイルが読み込めるか）
 on:
   pull_request:
@@ -27,6 +27,10 @@ jobs:
       - name: 依存の導入
         run: npm ci --no-audit --no-fund
 
-      # ブラウザーは入れない（テストを動かさないため）
+      # ブラウザーは入れない（E2E のシナリオを動かさないため）
       - name: 静的チェック
         run: npm run check
+
+      # support/ の部品の単体テスト（ブラウザー・対象の環境を使わない）
+      - name: 単体テスト
+        run: npm run test:unit

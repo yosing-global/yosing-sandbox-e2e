@@ -15,7 +15,7 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 | :--- | :--- |
 | `tests/` | シナリオ |
 | `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
-| `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
+| `support/` | TOTP の計算・次の30秒を待つ部品（`totp.ts`）、テストのデータ（`test-data.ts`）、fixture（`fixtures.ts`）。単体テストは `*.test.ts` |
 | `playwright.config.ts` | 対象の URL（環境変数）、端末（PC・スマホ）、やり直し・記録の設定 |
 | `.github/workflows/` | このリポジトリの PR の静的チェック（`pr.yml`） |
 
@@ -23,6 +23,7 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 
 | プロジェクト | ブラウザー | 画面 | 対象のテスト |
 | :--- | :--- | :--- | :--- |
+| `unit` | 使わない | — | `support/**/*.test.ts` |
 | `pc` | Chromium | 1280×800 | タグ `@mobile-only` 以外 |
 | `mobile` | Chromium（タッチ操作あり） | 390×844 | タグ `@mobile`・`@mobile-only` |
 
@@ -48,12 +49,18 @@ npx playwright install chromium
    .\gradlew.bat bootRun --args='--spring.profiles.active=local'
    ```
 
-2. web のリポジトリで、web を起動する（`http://localhost:3000`。手元の API を呼ぶ）。
+2. web のリポジトリで、web をビルドして本番モードで起動する（`http://localhost:3000`。手元の API を呼ぶ）。
 
    ```powershell
    npm ci
-   npm run dev
+   npm run build
+   $env:API_BASE_URL = "http://localhost:8080"
+   $env:APP_ENV = "local"
+   npx next start -p 3000
    ```
+
+   - `npm run dev`（開発モード）では動かさない。ブラウザーが HMR につながるたびにページの読み直し（`HMR hash mismatch`）が繰り返され、画面の移動やメモリの値が消えてテストが落ちる。
+   - web のコードを変えたら、ビルドし直す。
 
 3. このリポジトリで、テストを動かす。
 
@@ -83,7 +90,8 @@ npm test
 
 | コマンド | 内容 |
 | :--- | :--- |
-| `npm test` | 全部のテスト（PC・スマホ） |
+| `npm test` | 全部のテスト（部品の単体テスト・PC・スマホ） |
+| `npm run test:unit` | `support/` の部品の単体テスト（ブラウザー・対象の環境を使わない） |
 | `npm run test:pc` / `npm run test:mobile` | 端末を絞って動かす |
 | `npm run report` | 前回の結果のレポートを開く |
 | `npm run check` | 整形の確認・ESLint・型チェック・テストの一覧（PR で動かすものと同じ） |

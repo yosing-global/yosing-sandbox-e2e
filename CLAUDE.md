@@ -130,7 +130,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - nonprod の URL は `https://<env>.local.sandbox.yosing.net:8090`（DNS は 127.0.0.1 を返す）。GitHub のランナー・手元から、SSM のポートフォワーディング（手元の 8090 → リバースプロキシの 443）でつなぐ。手順は web の Wiki の「環境別接続手順」、CI での作りは api・web の `.github/workflows/_deploy.yml` の `verify`（SSM でつないで `/api/health` を待つ）が手本。
 - 証明書の誤りを無視する設定は使わない。
 - nonprod の稼働時間は毎日 9:00〜翌 1:00（JST）。外の時間は 502。
-- 手元：web（`http://localhost:3000`）は手元の API（`http://localhost:8080`）を呼ぶ。API は api のリポジトリで `docker compose up -d` → `.\gradlew.bat bootRun --args='--spring.profiles.active=local'`、web は `npm ci` → `npm run dev`。
+- 手元：web（`http://localhost:3000`）は手元の API（`http://localhost:8080`）を呼ぶ。API は api のリポジトリで `docker compose up -d` → `.\gradlew.bat bootRun --args='--spring.profiles.active=local'`、web は `npm ci` → `npm run build` → 環境変数 `API_BASE_URL=http://localhost:8080`・`APP_ENV=local` を付けて `npx next start -p 3000`（本番モード）。`npm run dev` では、HMR のつなぎ直しのたびにページの読み直し（`HMR hash mismatch`）が繰り返され、E2E が落ちる（Next.js 16.4.5 で確認）。
 
 ### CI からの呼び出し
 

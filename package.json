@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "playwright test",
+    "test:unit": "playwright test --project=unit",
     "test:pc": "playwright test --project=pc",
     "test:mobile": "playwright test --project=mobile",
     "report": "playwright show-report",
@@ -26,6 +27,7 @@
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-playwright": "^2.12.2",
+    "otplib": "^13.6.0",
     "prettier": "^3.9.10",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.2"

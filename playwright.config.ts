@@ -30,6 +30,12 @@ export default defineConfig({
   //   @mobile        ：PC とスマホ（E01〜E03）
   //   @mobile-only   ：スマホだけ（E12）
   projects: [
+    // support/ の部品の単体テスト（ブラウザーも対象の環境も使わない）
+    {
+      name: "unit",
+      testDir: "./support",
+      testMatch: "**/*.test.ts",
+    },
     {
       name: "pc",
       grepInvert: /@mobile-only/,
