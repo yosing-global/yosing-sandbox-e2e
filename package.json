@@ -1,0 +1,33 @@
+{
+  "name": "yosing-sandbox-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "sandbox の E2E テスト（Playwright）",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:pc": "playwright test --project=pc",
+    "test:mobile": "playwright test --project=mobile",
+    "report": "playwright show-report",
+    "lint": "eslint --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "list": "playwright test --list",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run list"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-playwright": "^2.12.2",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}

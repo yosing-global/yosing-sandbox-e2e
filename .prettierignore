@@ -1,0 +1,6 @@
+package-lock.json
+playwright-report/
+test-results/
+blob-report/
+# 文書は手で整える（表の幅などを Prettier に変えさせない）
+*.md
