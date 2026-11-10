@@ -1,0 +1,11 @@
+node_modules/
+
+# Playwright の結果（トレース・スクリーンショット・レポート）
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# 手元の環境変数
+.env
+.env.*
