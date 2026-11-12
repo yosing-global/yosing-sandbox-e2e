@@ -16,7 +16,8 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 | `tests/` | シナリオ（E01〜E12）。機能分類ごとに1ファイル（下の「シナリオ」） |
 | `pages/` | 画面ごとの部品（Page Object）。文言（Notion の「4.1 UI/UX設計」から書き写す）と操作をまとめる。`flows.ts` は登録・ログインの流れ |
 | `support/` | TOTP の計算・次の30秒を待つ部品（`totp.ts`）、テストのデータ（`test-data.ts`）、fixture（`fixtures.ts`）。単体テストは `*.test.ts` |
-| `playwright.config.ts` | 対象の URL（環境変数）、端末（PC・スマホ）、やり直し・記録の設定 |
+| `playwright.config.ts` | E2E の設定：対象の URL（環境変数）、端末（PC・スマホ）、やり直し・記録の設定 |
+| `playwright.unit.config.ts` | `support/` の単体テストの設定（`npm run test:unit`）。E2E と分けて、`npx playwright test` では動かない |
 | `.github/workflows/` | web・api の CI から呼ぶ再利用できるワークフロー（`e2e.yml`）、このリポジトリの PR の静的チェック（`pr.yml`） |
 
 ## シナリオ
@@ -35,7 +36,6 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 
 | プロジェクト | ブラウザー | 画面 | 対象のテスト |
 | :--- | :--- | :--- | :--- |
-| `unit` | 使わない | — | `support/**/*.test.ts` |
 | `pc` | Chromium | 1280×800 | タグ `@mobile-only` 以外 |
 | `mobile` | Chromium（タッチ操作あり） | 390×844 | タグ `@mobile`・`@mobile-only` |
 
@@ -104,8 +104,8 @@ npm test
 
 | コマンド | 内容 |
 | :--- | :--- |
-| `npm test` | 全部のテスト（部品の単体テスト・PC・スマホ） |
-| `npm run test:unit` | `support/` の部品の単体テスト（ブラウザー・対象の環境を使わない） |
+| `npm test` | E2E（PC・スマホ）。部品の単体テストは含まない |
+| `npm run test:unit` | `support/` の部品の単体テスト（`playwright.unit.config.ts`。ブラウザー・対象の環境を使わない） |
 | `npm run test:pc` / `npm run test:mobile` | 端末を絞って動かす |
 | `npm run report` | 前回の結果のレポートを開く |
 | `npm run check` | 整形の確認・ESLint・型チェック・テストの一覧（PR で動かすものと同じ） |
