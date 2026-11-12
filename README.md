@@ -17,7 +17,7 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 | `pages/` | 画面ごとの部品（Page Object）。文言（Notion の「4.1 UI/UX設計」から書き写す）と操作をまとめる。`flows.ts` は登録・ログインの流れ |
 | `support/` | TOTP の計算・次の30秒を待つ部品（`totp.ts`）、テストのデータ（`test-data.ts`）、fixture（`fixtures.ts`）。単体テストは `*.test.ts` |
 | `playwright.config.ts` | 対象の URL（環境変数）、端末（PC・スマホ）、やり直し・記録の設定 |
-| `.github/workflows/` | このリポジトリの PR の静的チェック（`pr.yml`） |
+| `.github/workflows/` | web・api の CI から呼ぶ再利用できるワークフロー（`e2e.yml`）、このリポジトリの PR の静的チェック（`pr.yml`） |
 
 ## シナリオ
 
@@ -114,3 +114,34 @@ npm test
 ## 失敗したとき
 
 - 失敗したテストだけ、トレースとスクリーンショットを `test-results/` に残す。`npx playwright show-trace <trace.zip>` で開く。
+- CI では、HTML のレポート（トレース・スクリーンショットを含む）を、呼ぶ側のリポジトリの Actions の成果物 `e2e-report-<環境>-<試行の回数>` に7日残す。
+
+## CI から呼ぶ（`e2e.yml`）
+
+web・api の CI の `deploy → verify` の後ろで、再利用できるワークフローとして呼ぶ。デプロイした環境に SSM でつなぎ、`/api/health` を待ってから流す。CI では、失敗したテストを1回だけやり直す。
+
+```yaml
+e2e:
+  needs: deploy
+  uses: yosing-global/yosing-sandbox-e2e/.github/workflows/e2e.yml@develop
+  permissions:
+    contents: read
+    id-token: write
+  with:
+    app_env: pr${{ github.event.pull_request.number }}
+    e2e_ref: develop
+    aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
+  secrets:
+    e2e_deploy_key: ${{ secrets.E2E_DEPLOY_KEY }}
+```
+
+| 入力 | 内容 |
+| :--- | :--- |
+| `app_env` | 対象の環境（`dev` / `test` / `pr<番号>`）。今は nonprod だけ（stg はインフラができてから足す） |
+| `e2e_ref` | テストのコードを取ってくるブランチ。`uses` の `@` の後ろと同じにする |
+| `aws_role_arn` | 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables から渡す。ログでは伏せる） |
+| `e2e_deploy_key`（secret） | このリポジトリだけを読めるデプロイキー（秘密鍵）。このリポジトリを一般公開した後は要らない |
+
+- 参照するブランチは、対象の環境にデプロイされている web の版に合わせる：PR 環境・dev・test は `develop`、stg は `main`。
+- 呼ぶ側のジョブに `environment:` を付けない（OIDC の `sub` が変わり、CI ロールに入れなくなる）。
+- nonprod の稼働時間（9:00〜翌 1:00、JST）の外では、ヘルスチェックで落ちる。

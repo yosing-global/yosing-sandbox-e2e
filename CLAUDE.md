@@ -15,7 +15,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 3 | 部品（`support/`。済み）：TOTP の計算・次の30秒を待つ部品・ログイン ID を作る部品（fixture）。単体テスト付き | テストのデータと認証コードを作れる |
 | 4 | 画面ごとの部品（`pages/`。済み）：ログイン・新規登録・ダッシュボード・404。文言と操作をまとめる | シナリオから使える |
 | 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
-| 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す） | web・api から呼べる |
+| 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。作成済み。動かして確かめるのは 7） | web・api から呼べる |
 | 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test）。デプロイキーを作る | web の PR で E2E が動く |
 | 8 | test 環境のロック（`aws-infra-env` に DynamoDB のテーブルと権限）、api の `develop.yml` に `e2e` と `cleanup`（テストのユーザーの掃除） | develop へのマージで test に E2E が流れる |
 | 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
@@ -157,7 +157,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。ジョブに `environment:` を付けない（`sub` が変わる）。
 - アカウント ID・ロールの ARN は、呼ぶ側の GitHub の Variables から渡し、`::add-mask::` で伏せる。
 - test 環境の排他：デプロイから E2E の終わりまでを、web と api の間で直列にする（DynamoDB の条件付き書き込みのロック、期限付き）。テーブルと権限は `aws-infra-env` に足す。
-- このリポジトリ自身の PR では、静的チェック（型チェック・ESLint）だけを動かす（AWS にはつながない）。
+- このリポジトリ自身の PR では、静的チェック（整形・ESLint・型チェック・テストの一覧）、`support/` の単体テスト、ワークフローの書き方の確認（actionlint）だけを動かす（AWS にはつながない）。
 - 失敗したら、1回だけやり直す（CI のみ）。
 - 失敗したとき、トレースとスクリーンショットを成果物に残す（7日）。成果物とログは、呼ぶ側のリポジトリに残る。ログにパスワード・コード・キーを出さない。
 - 動画はふだん撮らない。デモ動画は、web の側に置く手動のワークフロー（`workflow_dispatch`）で撮る。
@@ -170,7 +170,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
 | `playwright.config.ts` | 対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
-| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`）、自身の PR の静的チェック |
+| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`aws_role_arn`、secret は `e2e_deploy_key`）、自身の PR の静的チェック（`pr.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
 
