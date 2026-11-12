@@ -16,7 +16,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 4 | 画面ごとの部品（`pages/`。済み）：ログイン・新規登録・ダッシュボード・404。文言と操作をまとめる | シナリオから使える |
 | 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
 | 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。作成済み。動かして確かめるのは 7） | web・api から呼べる |
-| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test）。デプロイキーを作る | web の PR で E2E が動く |
+| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
 | 8 | test 環境のロック（`aws-infra-env` に DynamoDB のテーブルと権限）、api の `develop.yml` に `e2e` と `cleanup`（テストのユーザーの掃除） | develop へのマージで test に E2E が流れる |
 | 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
 
@@ -33,8 +33,9 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - 公開するのは、アプリのリポジトリ（web・api・e2e）とその Wiki。インフラのリポジトリ（`aws-infra-*`）は非公開のまま。Notion は非公開（最後に公開用の1ページを作り、README からリンクする）。
 - このリポジトリは、一般公開まで非公開（2026-11-10 に決定）。web・api の CI からは次の2つで使う。
   - このリポジトリの設定（Settings → Actions → Access）で、同じ organization のリポジトリからワークフローを使えるようにする。
-  - コードの取り込みはデプロイキー（このリポジトリだけを読める SSH の鍵。期限なし）。秘密鍵は web・api の Secrets に置き、`actions/checkout` の `ssh-key` で渡す。
-- 一般公開するときの片づけ：web・api のワークフローの `ssh-key` の行を消す → web・api の Secrets から鍵を消す → このリポジトリの Deploy keys から鍵を消す。
+  - コードの取り込みは、e2e を読む GitHub App（organization の App。このリポジトリだけにインストールし、権限は Contents の読み取りだけ。2026-11-12 に作成）。`e2e.yml` の中で `actions/create-github-app-token` により1時間だけ使えるトークンを作り、`actions/checkout` に渡す。web・api には、Variables に `E2E_APP_CLIENT_ID`、Secrets に `E2E_APP_PRIVATE_KEY` を置く。
+  - デプロイキーは使わない（organization のポリシーで使えないうえ、GitHub も App を勧めている。鍵に期限が無い）。
+- 一般公開するときの片づけ：web・api のワークフローの `e2e_app_client_id`・`e2e_app_private_key` の行を消す → web・api の Variables・Secrets から `E2E_APP_CLIENT_ID`・`E2E_APP_PRIVATE_KEY` を消す → GitHub App をアンインストールして消す（`e2e.yml` は、App の情報が無ければトークン無しで取ってくる）。
 - 公開する前提で書く：ファイル・コメント・ログに、アカウント ID・ロールの ARN・秘密の値を書かない。
 
 ## 設計の要点（詳細は Notion）
@@ -170,7 +171,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
 | `playwright.config.ts` | 対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
-| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`aws_role_arn`、secret は `e2e_deploy_key`）、自身の PR の静的チェック（`pr.yml`） |
+| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`aws_role_arn`、`e2e_app_client_id`、secret は `e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
 

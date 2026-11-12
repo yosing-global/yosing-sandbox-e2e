@@ -131,8 +131,9 @@ e2e:
     app_env: pr${{ github.event.pull_request.number }}
     e2e_ref: develop
     aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
+    e2e_app_client_id: ${{ vars.E2E_APP_CLIENT_ID }}
   secrets:
-    e2e_deploy_key: ${{ secrets.E2E_DEPLOY_KEY }}
+    e2e_app_private_key: ${{ secrets.E2E_APP_PRIVATE_KEY }}
 ```
 
 | 入力 | 内容 |
@@ -140,7 +141,10 @@ e2e:
 | `app_env` | 対象の環境（`dev` / `test` / `pr<番号>`）。今は nonprod だけ（stg はインフラができてから足す） |
 | `e2e_ref` | テストのコードを取ってくるブランチ。`uses` の `@` の後ろと同じにする |
 | `aws_role_arn` | 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables から渡す。ログでは伏せる） |
-| `e2e_deploy_key`（secret） | このリポジトリだけを読めるデプロイキー（秘密鍵）。このリポジトリを一般公開した後は要らない |
+| `e2e_app_client_id` | このリポジトリを読む GitHub App の Client ID（呼ぶ側の Variables `E2E_APP_CLIENT_ID` から渡す）。このリポジトリを一般公開した後は要らない |
+| `e2e_app_private_key`（secret） | 同じ App の秘密鍵（呼ぶ側の Secrets `E2E_APP_PRIVATE_KEY`）。このリポジトリを一般公開した後は要らない |
+
+- このリポジトリは非公開のため、呼ぶ側のトークンでは読めない。`e2e.yml` の中で、App の秘密鍵から「このリポジトリの中身を読むだけ」のトークン（1時間で切れる）を作って取ってくる。
 
 - 参照するブランチは、対象の環境にデプロイされている web の版に合わせる：PR 環境・dev・test は `develop`、stg は `main`。
 - 呼ぶ側のジョブに `environment:` を付けない（OIDC の `sub` が変わり、CI ロールに入れなくなる）。
