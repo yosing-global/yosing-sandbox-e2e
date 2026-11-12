@@ -130,9 +130,9 @@ e2e:
   with:
     app_env: pr${{ github.event.pull_request.number }}
     e2e_ref: develop
-    aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
     e2e_app_client_id: ${{ vars.E2E_APP_CLIENT_ID }}
   secrets:
+    aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
     e2e_app_private_key: ${{ secrets.E2E_APP_PRIVATE_KEY }}
 ```
 
@@ -140,7 +140,7 @@ e2e:
 | :--- | :--- |
 | `app_env` | 対象の環境（`dev` / `test` / `pr<番号>`）。今は nonprod だけ（stg はインフラができてから足す） |
 | `e2e_ref` | テストのコードを取ってくるブランチ。`uses` の `@` の後ろと同じにする |
-| `aws_role_arn` | 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables から渡す。ログでは伏せる） |
+| `aws_role_arn`（secret） | 呼ぶ側の CI ロールの ARN。値は呼ぶ側の Variables `AWS_ROLE_ARN` を、**`secrets:` の側に**書いて渡す（secret の値はログで最初から伏せられる。`with:` で渡すと、伏せる前のステップに元の値が出る） |
 | `e2e_app_client_id` | このリポジトリを読む GitHub App の Client ID（呼ぶ側の Variables `E2E_APP_CLIENT_ID` から渡す）。このリポジトリを一般公開した後は要らない |
 | `e2e_app_private_key`（secret） | 同じ App の秘密鍵（呼ぶ側の Secrets `E2E_APP_PRIVATE_KEY`）。このリポジトリを一般公開した後は要らない |
 

@@ -156,7 +156,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - `e2e.yml` は、テストのコードを、呼ばれたのと同じブランチの最新から取ってくる（ワークフローとテストのコードの版をそろえる。CI の Re-run でも、マージした後の新しいシナリオが使われるように）。
 - マージの順のずれで stg の E2E が落ちたときは、相手側をマージしてから流し直す。ずれている間は stg の E2E が赤のままで、本当の不具合を見逃しやすいので、ずれる時間を短くする（下の「git」の決まり）。
 - AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。ジョブに `environment:` を付けない（`sub` が変わる）。
-- アカウント ID・ロールの ARN は、呼ぶ側の GitHub の Variables から渡し、`::add-mask::` で伏せる。
+- ロールの ARN（アカウント ID を含む）は、呼ぶ側の Variables の値を、`e2e.yml` の **secret** として渡す（`secrets:` の側に書く）。secret の値はログで最初から伏せられる。入力（`with:`）や Variables のまま使うと、`::add-mask::` を行うステップ自身の `env:` の表示に元の値が出る（2026-11-12 に web の PR の実行で起きた）。アカウント ID だけの値は、`e2e.yml` の最初のステップで `::add-mask::` で伏せる。
 - test 環境の排他：デプロイから E2E の終わりまでを、web と api の間で直列にする（DynamoDB の条件付き書き込みのロック、期限付き）。テーブルと権限は `aws-infra-env` に足す。
 - このリポジトリ自身の PR では、静的チェック（整形・ESLint・型チェック・テストの一覧）、`support/` の単体テスト、ワークフローの書き方の確認（actionlint）だけを動かす（AWS にはつながない）。
 - 失敗したら、1回だけやり直す（CI のみ）。
@@ -171,7 +171,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
 | `playwright.config.ts` | 対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
-| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`aws_role_arn`、`e2e_app_client_id`、secret は `e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`） |
+| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`e2e_app_client_id`、secret は `aws_role_arn`・`e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
 

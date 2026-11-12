@@ -15,9 +15,9 @@ name: e2e
 #     with:
 #       app_env: pr${{ github.event.pull_request.number }}
 #       e2e_ref: develop
-#       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
 #       e2e_app_client_id: ${{ vars.E2E_APP_CLIENT_ID }}
 #     secrets:
+#       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
 #       e2e_app_private_key: ${{ secrets.E2E_APP_PRIVATE_KEY }}
 on:
   workflow_call:
@@ -30,10 +30,6 @@ on:
         description: e2e のテストのコードを取ってくるブランチ（uses の @ の後ろと同じにする。develop / main）
         type: string
         required: true
-      aws_role_arn:
-        description: 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables から渡す。ログでは伏せる）
-        type: string
-        required: true
       # e2e が非公開のあいだ、e2e を読むための GitHub App（e2e だけにインストールし、権限は Contents の読み取りだけ）
       #   org のポリシーでデプロイキーが使えないため、App のトークン（1時間で切れる）で取ってくる。e2e を一般公開した後は要らない
       e2e_app_client_id:
@@ -42,6 +38,11 @@ on:
         required: false
         default: ""
     secrets:
+      # ロールの ARN（アカウント ID を含む）は secret で受け取る。secret の値は、どのステップのログでも最初から伏せられる
+      #   入力（inputs）や Variables で受け取ると、伏せる前のステップ（::add-mask:: を行うステップ自身の env の表示を含む）に、元の値が出てしまう
+      aws_role_arn:
+        description: 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables の値を、secrets として渡す）
+        required: true
       e2e_app_private_key:
         description: e2e を読む GitHub App の秘密鍵
         required: false
@@ -65,12 +66,12 @@ jobs:
       SSM_PLUGIN_VERSION: 1.2.896.0
       SSM_PLUGIN_SHA256: 53f51fcc67314a4bf85888a38a3967cd41f8d0f28a60a9469a63acf935ba713e
     steps:
-      # 公開リポジトリでは Actions のログも公開されるため、ロールの ARN・アカウント ID をログに出さない
+      # 公開リポジトリでは Actions のログも公開されるため、アカウント ID だけが出る場面（AWS CLI の出力等）でも伏せる
+      #   ARN そのものは secret なので、最初から伏せられている
       - name: 値の伏せ字
         env:
-          AWS_ROLE_ARN: ${{ inputs.aws_role_arn }}
+          AWS_ROLE_ARN: ${{ secrets.aws_role_arn }}
         run: |
-          echo "::add-mask::${AWS_ROLE_ARN}"
           echo "::add-mask::$(echo "${AWS_ROLE_ARN}" | cut -d: -f5)"
 
       # 今は nonprod（SSM でつなぐ環境）だけ。stg（CloudFront の公開の入口）は、インフラができてから足す
@@ -126,7 +127,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ inputs.aws_role_arn }}
+          role-to-assume: ${{ secrets.aws_role_arn }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
 
