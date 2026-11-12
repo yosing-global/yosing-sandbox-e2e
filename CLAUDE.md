@@ -4,7 +4,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## 状況（2026-11-12 時点）
 
-- 手順 1〜5 は済み。シナリオ E01〜E12 が、手元（`--workers=1`）と dev（SSM。4つ並べても）で全部通る。次は手順 6。
+- 手順 1〜6 は済み。手順 7 は web の `pr.yml` まで済み（web の PR で E2E が全部通る）。`develop.yml` は手順 8 の test のロックと一緒に足す。次は手順 8。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
 - 作業の手順（web のリポジトリで整理した）：
 
@@ -15,17 +15,17 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 3 | 部品（`support/`。済み）：TOTP の計算・次の30秒を待つ部品・ログイン ID を作る部品（fixture）。単体テスト付き | テストのデータと認証コードを作れる |
 | 4 | 画面ごとの部品（`pages/`。済み）：ログイン・新規登録・ダッシュボード・404。文言と操作をまとめる | シナリオから使える |
 | 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
-| 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。作成済み。動かして確かめるのは 7） | web・api から呼べる |
-| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
+| 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。済み） | web・api から呼べる |
+| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境。済み。`develop.yml` は test。手順 8 と一緒に）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
 | 8 | test 環境のロック（`aws-infra-env` に DynamoDB のテーブルと権限）、api の `develop.yml` に `e2e` と `cleanup`（テストのユーザーの掃除） | develop へのマージで test に E2E が流れる |
 | 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
 
 - 手順 2〜5 はこのリポジトリだけで進める。CI（6 以降）とは PR を分ける。
 - 手順 6 の `e2e.yml` は、呼ぶ側（web）が無いと動かせない。6 は静的チェックまでで develop に入れ、7 の web の PR で初めて動かして直す。
 - E2E の後は、stg / prod のインフラと各アプリの CI の仕上げ。リポジトリ・Wiki の一般公開は、全部を確かめた後の最後。
-- E2E で見つかった web の問題（web のリポジトリで直す。7 より前に直したい）：
-  - スマホで「ダッシュボード → ログアウト → ログイン → 同じタブでダッシュボード」と進むと、まれに React の誤り #185（Maximum update depth exceeded）でエラーの画面になる（手元で1回。dev では 28回流して起きていない）。隠れた画面を出し直す部品（`UnmountWhenHidden`・`ResetWhenHidden`・スマホのメニュー）の、layout effect の中の状態の変更が怪しい。
+- E2E で見つかった web の問題（web のリポジトリで直す）：
   - `npm run dev` では、ブラウザーが HMR につながるたびに `HMR hash mismatch` でページが読み直され続ける（Next.js 16.4.5）。16.4.6 で直るかを確かめる。
+  - 直したもの：スマホの「ダッシュボード → ログアウト → ログイン → ダッシュボード」で、まれに React の誤り #185 になる件（2026-11-12。原因は `UnmountWhenHidden` が出直すときの同期の更新と Suspense の繰り返し。詳細は web の CLAUDE.md）。
 - 手元の web に、いくつものテストを並べて動かすと、web が 10〜20秒止まることがある（CPU は使っていない。dev では起きない）。手元の Windows の環境に限ったものとして、手元では `--workers=1` で動かす。
 
 ## 公開の範囲
