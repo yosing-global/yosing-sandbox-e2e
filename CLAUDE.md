@@ -170,7 +170,8 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `tests/` | シナリオ（`login.spec.ts`・`registration.spec.ts` 等）。テストには、何を確かめるかを1文で書いたコメントを付ける |
 | `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
-| `playwright.config.ts` | 対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
+| `playwright.config.ts` | E2E の設定：対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
+| `playwright.unit.config.ts` | `support/` の単体テストの設定（`npm run test:unit`）。E2E と分ける（`npx playwright test`・`e2e.yml` では単体テストを動かさない） |
 | `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`e2e_app_client_id`、secret は `aws_role_arn`・`e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
