@@ -2,26 +2,31 @@
 
 sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandbox は個人の学習とポートフォリオを兼ねたプロダクトで、最初の範囲は TOTP 認証（登録・ログイン）と、認証後のダッシュボード・ログアウト。画面と BFF は `yosing-sandbox-web`（Next.js）、API は `yosing-sandbox-api`（Spring Boot）。
 
-## 状況（2026-11-10 時点）
+## 状況（2026-11-12 時点）
 
-- リポジトリを作った（README だけ）。web は全部の画面ができ、dev で動作を確かめた。API も全部のエンドポイントができている。
+- 手順 1〜5 は済み。シナリオ E01〜E12 が、手元（`--workers=1`）と dev（SSM。4つ並べても）で全部通る。次は手順 6。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
-- 作業の手順（web のリポジトリで整理した。1 は済み）：
+- 作業の手順（web のリポジトリで整理した）：
 
 | # | 作業 | 成果 |
 | :--- | :--- | :--- |
 | 1 | 設計の書き足し（Notion。済み） | 設計が今の web と合う |
-| 2 | 土台：Playwright・TypeScript・ESLint（Playwright の推奨ルール）・Prettier、`playwright.config.ts`（URL は環境変数。PC・スマホ）、README、自身の PR の静的チェック（`.github/workflows`） | 手元で `npx playwright test` が動く |
-| 3 | 部品（`support/`）：TOTP の計算・次の30秒を待つ部品・ログイン ID を作る部品（fixture）。単体テスト付き | テストのデータと認証コードを作れる |
-| 4 | 画面ごとの部品（`pages/`）：ログイン・新規登録・ダッシュボード・エラー。文言と操作をまとめる | シナリオから使える |
-| 5 | シナリオ E01〜E12。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
+| 2 | 土台（済み）：Playwright・TypeScript・ESLint（Playwright の推奨ルール）・Prettier、`playwright.config.ts`（URL は環境変数。PC・スマホ）、README、自身の PR の静的チェック（`.github/workflows`） | 手元で `npx playwright test` が動く |
+| 3 | 部品（`support/`。済み）：TOTP の計算・次の30秒を待つ部品・ログイン ID を作る部品（fixture）。単体テスト付き | テストのデータと認証コードを作れる |
+| 4 | 画面ごとの部品（`pages/`。済み）：ログイン・新規登録・ダッシュボード・404。文言と操作をまとめる | シナリオから使える |
+| 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
 | 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す） | web・api から呼べる |
 | 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test）。デプロイキーを作る | web の PR で E2E が動く |
 | 8 | test 環境のロック（`aws-infra-env` に DynamoDB のテーブルと権限）、api の `develop.yml` に `e2e` と `cleanup`（テストのユーザーの掃除） | develop へのマージで test に E2E が流れる |
 | 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
 
 - 手順 2〜5 はこのリポジトリだけで進める。CI（6 以降）とは PR を分ける。
+- 手順 6 の `e2e.yml` は、呼ぶ側（web）が無いと動かせない。6 は静的チェックまでで develop に入れ、7 の web の PR で初めて動かして直す。
 - E2E の後は、stg / prod のインフラと各アプリの CI の仕上げ。リポジトリ・Wiki の一般公開は、全部を確かめた後の最後。
+- E2E で見つかった web の問題（web のリポジトリで直す。7 より前に直したい）：
+  - スマホで「ダッシュボード → ログアウト → ログイン → 同じタブでダッシュボード」と進むと、まれに React の誤り #185（Maximum update depth exceeded）でエラーの画面になる（手元で1回。dev では 28回流して起きていない）。隠れた画面を出し直す部品（`UnmountWhenHidden`・`ResetWhenHidden`・スマホのメニュー）の、layout effect の中の状態の変更が怪しい。
+  - `npm run dev` では、ブラウザーが HMR につながるたびに `HMR hash mismatch` でページが読み直され続ける（Next.js 16.4.5）。16.4.6 で直るかを確かめる。
+- 手元の web に、いくつものテストを並べて動かすと、web が 10〜20秒止まることがある（CPU は使っていない。dev では起きない）。手元の Windows の環境に限ったものとして、手元では `--workers=1` で動かす。
 
 ## 公開の範囲
 
@@ -93,7 +98,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - 確かめない文言：見出しの下の説明文、入力欄の下の案内、仮置きの機能のメニュー・カード、飾り。
 - **web の離れた画面は消えずに隠れて残る**（Next.js の Cache Components）。
   - `getByLabel` は隠れた入力欄にも当たる。見えているものに絞る：`page.getByLabel("ログイン ID").filter({ visible: true })`。`getByRole` は隠れた要素を除くので、そのままでよい。
-  - Next.js の画面の移動を読み上げる部品（`next-route-announcer`、shadow DOM の中）も `role="alert"` を持つ。お知らせは `main` の中で探す：`page.locator("main").getByRole("alert")`。
+  - Next.js の画面の移動を読み上げる部品（`next-route-announcer`、shadow DOM の中）も `role="alert"` を持つ。お知らせは `main` の中で探す：`page.getByRole("main").getByRole("alert")`（`locator("main")` は隠れて残る画面の `main` にも当たるため、`getByRole` を使う）。
 - web で付けた名前：
 
 | 部品 | 名前 |
@@ -132,11 +137,11 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ### 環境と接続
 
-| 契機 | 対象の環境 | 呼ぶ側 |
-| :--- | :--- | :--- |
-| web の PR | web の PR 環境 `pr<番号>`（API は dev） | web |
-| web・api の develop へのマージ | test | web・api |
-| main へのマージ | stg（インフラ未作成。CloudFront の公開の入口から開く） | web・api |
+| 契機 | 対象の環境 | 呼ぶ側 | 呼ぶ E2E |
+| :--- | :--- | :--- | :--- |
+| web の PR | web の PR 環境 `pr<番号>`（API は dev） | web | develop |
+| web・api の develop へのマージ | test | web・api | develop |
+| main へのマージ | stg（インフラ未作成。CloudFront の公開の入口から開く） | web・api | main |
 
 - nonprod の URL は `https://<env>.local.sandbox.yosing.net:8090`（DNS は 127.0.0.1 を返す）。GitHub のランナー・手元から、SSM のポートフォワーディング（手元の 8090 → リバースプロキシの 443）でつなぐ。手順は web の Wiki の「環境別接続手順」、CI での作りは api・web の `.github/workflows/_deploy.yml` の `verify`（SSM でつないで `/api/health` を待つ）が手本。
 - 証明書の誤りを無視する設定は使わない。
@@ -145,7 +150,10 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ### CI からの呼び出し
 
-- このリポジトリに再利用できるワークフロー（`workflow_call`）を置く。入力は対象の環境。web・api の CI の `deploy → verify` の後ろに `e2e` のジョブを足して呼ぶ。呼ぶ側は、このリポジトリの main を参照する。
+- このリポジトリに再利用できるワークフロー（`workflow_call`）を置く。入力は対象の環境。web・api の CI の `deploy → verify` の後ろに `e2e` のジョブを足して呼ぶ。
+- 呼ぶ側は、対象の環境にデプロイされている web の版に合わせて参照する（E2E のシナリオは、その環境の web と合っている必要があるため）：PR 環境・dev・test は `@develop`、stg は `@main`（上の表の「呼ぶ E2E」）。api の CI も、同じ環境の web を相手にするので同じ参照にする。
+- `e2e.yml` は、テストのコードを、呼ばれたのと同じブランチの最新から取ってくる（ワークフローとテストのコードの版をそろえる。CI の Re-run でも、マージした後の新しいシナリオが使われるように）。
+- マージの順のずれで stg の E2E が落ちたときは、相手側をマージしてから流し直す。ずれている間は stg の E2E が赤のままで、本当の不具合を見逃しやすいので、ずれる時間を短くする（下の「git」の決まり）。
 - AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。ジョブに `environment:` を付けない（`sub` が変わる）。
 - アカウント ID・ロールの ARN は、呼ぶ側の GitHub の Variables から渡し、`::add-mask::` で伏せる。
 - test 環境の排他：デプロイから E2E の終わりまでを、web と api の間で直列にする（DynamoDB の条件付き書き込みのロック、期限付き）。テーブルと権限は `aws-infra-env` に足す。
@@ -181,7 +189,11 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## git
 
-- ブランチは main と作業ブランチ（develop は使わない。環境にデプロイしないため）。作業ごとに `origin/main` から新しいブランチを作り、作った後に `git branch --unset-upstream` を実行する。
+- ブランチは main・develop・作業ブランチ（2026-11-12 に develop を足すと決定）。web・api と同じく、develop ＝ 次に出るもの（PR 環境・dev・test の E2E が使う）、main ＝ 出ているもの（stg の E2E が使う）。
+- 作業ごとに `origin/develop` から新しいブランチを作り、作った後に `git branch --unset-upstream` を実行する。PR は develop に向けて出す。
+- web・api と対になる変更（文言・部品の名前・新しい機能のシナリオ等）は、相手の develop と同じ時期に develop にマージする。どちらを先にするかは、PR の「関連 PR」に書く。
+- web を main に出すときは、e2e も develop → main に出す。web と対になる変更が develop に残ったまま、e2e だけを先に main に出さない。
+- stg の E2E だけを急いで直すときは、main から作業ブランチを作って main に直し、develop にも戻す（web・api の hotfix と同じ）。
 - コミットはユーザーの承認を得てから。メッセージは日本語で `feat:` / `fix:` / `docs:` 等で始め、最後に `Co-Authored-By` の行を付ける。
 - push・マージはユーザーが行う（Claude は push しない）。
 
