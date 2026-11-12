@@ -1,0 +1,174 @@
+name: e2e
+
+# 再利用できるワークフロー（呼ばれる側）：デプロイした環境に SSM でつなぎ、E2E を流す
+#   web・api の CI の deploy → verify の後ろの e2e のジョブから呼ぶ
+#   呼ぶ側のジョブで permissions（contents: read、id-token: write）を渡す。ジョブに environment: を付けない（OIDC の sub が変わる）
+#   呼ぶ側の参照は、対象の環境にデプロイされている web の版に合わせる（PR 環境・dev・test は @develop、stg は @main）
+#
+# 呼び出しの例（web の pr.yml）：
+#   e2e:
+#     needs: deploy
+#     uses: yosing-global/yosing-sandbox-e2e/.github/workflows/e2e.yml@develop
+#     permissions:
+#       contents: read
+#       id-token: write
+#     with:
+#       app_env: pr${{ github.event.pull_request.number }}
+#       e2e_ref: develop
+#       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
+#     secrets:
+#       e2e_deploy_key: ${{ secrets.E2E_DEPLOY_KEY }}
+on:
+  workflow_call:
+    inputs:
+      app_env:
+        description: 対象の環境（dev / test / pr<番号>）。URL の名前に使う
+        type: string
+        required: true
+      e2e_ref:
+        description: e2e のテストのコードを取ってくるブランチ（uses の @ の後ろと同じにする。develop / main）
+        type: string
+        required: true
+      aws_role_arn:
+        description: 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables から渡す。ログでは伏せる）
+        type: string
+        required: true
+    secrets:
+      e2e_deploy_key:
+        description: e2e のリポジトリだけを読めるデプロイキー（秘密鍵）。e2e を一般公開した後は要らない
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  APP_ENV: ${{ inputs.app_env }}
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Session Manager のプラグイン（バージョンとチェックサムを固定する。web・api の _deploy.yml と同じ）
+      SSM_PLUGIN_VERSION: 1.2.896.0
+      SSM_PLUGIN_SHA256: 53f51fcc67314a4bf85888a38a3967cd41f8d0f28a60a9469a63acf935ba713e
+    steps:
+      # 公開リポジトリでは Actions のログも公開されるため、ロールの ARN・アカウント ID をログに出さない
+      - name: 値の伏せ字
+        env:
+          AWS_ROLE_ARN: ${{ inputs.aws_role_arn }}
+        run: |
+          echo "::add-mask::${AWS_ROLE_ARN}"
+          echo "::add-mask::$(echo "${AWS_ROLE_ARN}" | cut -d: -f5)"
+
+      # 今は nonprod（SSM でつなぐ環境）だけ。stg（CloudFront の公開の入口）は、インフラができてから足す
+      - name: 入力の確認
+        env:
+          E2E_REF: ${{ inputs.e2e_ref }}
+        run: |
+          if ! [[ "${APP_ENV}" =~ ^(dev|test|pr[0-9]+)$ ]]; then
+            echo "対象の環境が nonprod（dev / test / pr<番号>）ではない：${APP_ENV}"
+            exit 1
+          fi
+          if [ -z "${E2E_REF}" ]; then
+            echo "e2e_ref が空"
+            exit 1
+          fi
+
+      # テストのコードは、呼ばれたのと同じブランチの最新から取る（CI の Re-run でも、マージした後のシナリオが使われるように）
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yosing-global/yosing-sandbox-e2e
+          ref: ${{ inputs.e2e_ref }}
+          ssh-key: ${{ secrets.e2e_deploy_key }}
+          persist-credentials: false
+
+      - name: テストのコードの版
+        env:
+          E2E_REF: ${{ inputs.e2e_ref }}
+        run: echo "e2e：${E2E_REF}（$(git rev-parse --short HEAD)）"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 依存の導入
+        run: npm ci --no-audit --no-fund
+
+      - name: ブラウザーの導入
+        run: npx playwright install --with-deps chromium
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Session Manager のプラグインの導入
+        run: |
+          curl --fail --silent --show-error --location --output /tmp/session-manager-plugin.deb \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/${SSM_PLUGIN_VERSION}/ubuntu_64bit/session-manager-plugin.deb"
+          echo "${SSM_PLUGIN_SHA256}  /tmp/session-manager-plugin.deb" | sha256sum --check
+          sudo dpkg --install /tmp/session-manager-plugin.deb
+
+      # リバースプロキシ（NAT インスタンスに同居）の 443 を、ランナーの 8090 につなぐ（web・api の _deploy.yml の verify と同じ）
+      #   インスタンス ID は作り直すと変わるため、Name タグで探す
+      - name: ポートフォワーディングの開始
+        run: |
+          id=$(aws ec2 describe-instances \
+            --filters Name=tag:Name,Values=nonprod-nat-ec2 Name=instance-state-name,Values=running \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          if [ -z "${id}" ] || [ "${id}" = "None" ]; then
+            echo "リバースプロキシ（nonprod-nat-ec2）が起動していない"
+            exit 1
+          fi
+          nohup aws ssm start-session --target "${id}" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters portNumber=443,localPortNumber=8090 > /tmp/ssm-session.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if grep --quiet 'Waiting for connections' /tmp/ssm-session.log; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/ssm-session.log
+          exit 1
+
+      # 呼ぶ側の verify で確かめた後だが、つなぎ直したので、応答するまで待ってから流す
+      - name: ヘルスチェック
+        run: |
+          url="https://${APP_ENV}.local.sandbox.yosing.net:8090/api/health"
+          for i in $(seq 1 24); do
+            body=$(curl --silent --show-error --max-time 10 "${url}" || true)
+            if echo "${body}" | grep --quiet '"status":"UP"'; then
+              echo "${url} → ${body}"
+              exit 0
+            fi
+            echo "待機中（${i}）：${body}"
+            sleep 5
+          done
+          echo "ヘルスチェックに失敗した：${url}"
+          exit 1
+
+      # CI では、失敗したテストを1回だけやり直す（playwright.config.ts の retries。CI=true は Actions が付ける）
+      - name: E2E
+        run: E2E_BASE_URL="https://${APP_ENV}.local.sandbox.yosing.net:8090" npx playwright test
+
+      # 失敗したテストのトレース・スクリーンショット（HTML のレポートに含まれる）。成果物は呼ぶ側のリポジトリに残る
+      #   画面にダミーのユーザーのキーが写ることがあるが、nonprod はインターネットから入れないため許容する（Notion の E2E の設計の 9章）
+      - name: 結果の保存
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-report-${{ inputs.app_env }}-${{ github.run_attempt }}
+          path: playwright-report/
+          retention-days: 7
+
+      - name: ポートフォワーディングのログ
+        if: always()
+        run: cat /tmp/ssm-session.log || true

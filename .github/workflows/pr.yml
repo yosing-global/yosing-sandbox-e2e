@@ -1,7 +1,7 @@
 name: pr
 
 # このリポジトリの PR：静的チェックと support/ の単体テストだけを動かす（AWS にはつながない。E2E は流さない）
-#   整形の確認・ESLint・型チェック・テストの一覧（設定とテストのファイルが読み込めるか）
+#   整形の確認・ESLint・型チェック・テストの一覧（設定とテストのファイルが読み込めるか）・ワークフローの書き方（actionlint）
 on:
   pull_request:
 
@@ -34,3 +34,11 @@ jobs:
       # support/ の部品の単体テスト（ブラウザー・対象の環境を使わない）
       - name: 単体テスト
         run: npm run test:unit
+
+      # ワークフローの書き方の確認（e2e.yml は呼ぶ側が無いと動かせないため、ここで書き方の誤りを見つける）
+      #   版とダイジェストを固定する
+      - name: ワークフローの確認（actionlint）
+        run: >-
+          docker run --rm --volume "${PWD}:/repo" --workdir /repo
+          rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
+          -color
