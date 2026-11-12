@@ -1,5 +1,13 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { CODE_HINT, dangerNotice, infoNotice, pathPattern, tabTitle, visibleField } from "./common";
+import {
+  clickAndWaitForSubmit,
+  CODE_HINT,
+  dangerNotice,
+  infoNotice,
+  pathPattern,
+  tabTitle,
+  visibleField,
+} from "./common";
 
 /** ログイン（ステップ1：ログイン ID・パスワード） */
 export class LoginPage {
@@ -49,7 +57,7 @@ export class LoginPage {
   async submit(loginId: string, password: string): Promise<void> {
     await this.loginId.fill(loginId);
     await this.password.fill(password);
-    await this.nextButton.click();
+    await clickAndWaitForSubmit(this.page, this.nextButton);
   }
 }
 
@@ -87,6 +95,6 @@ export class LoginVerifyPage {
   /** コードを入れて「ログイン」 */
   async submit(code: string): Promise<void> {
     await this.code.fill(code);
-    await this.loginButton.click();
+    await clickAndWaitForSubmit(this.page, this.loginButton);
   }
 }

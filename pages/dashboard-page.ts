@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { pathPattern, tabTitle } from "./common";
+import { clickAndWaitForSubmit, pathPattern, tabTitle } from "./common";
 
 /** ダッシュボード（ホーム） */
 export class DashboardPage {
@@ -40,7 +40,7 @@ export class DashboardPage {
     if (await this.openMenuButton.isVisible()) {
       await this.openMenuButton.click();
     }
-    await this.logoutButton.click();
+    await clickAndWaitForSubmit(this.page, this.logoutButton);
   }
 }
 

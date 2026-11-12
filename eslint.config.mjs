@@ -22,6 +22,13 @@ export default defineConfig([
     ...playwright.configs["flat/recommended"],
     files: ["tests/**", "pages/**", "support/**"],
   },
+  {
+    files: ["tests/**", "pages/**", "support/**"],
+    rules: {
+      // 画面の部品の expectOpened（URL・タイトル・見出しの確かめ）も、確かめとして数える
+      "playwright/expect-expect": ["warn", { assertFunctionPatterns: ["^expect"] }],
+    },
+  },
   // 整形は Prettier に任せる（ESLint の整形のルールを切る）。最後に置く
   prettier,
 ]);
