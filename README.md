@@ -14,7 +14,7 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 | 場所 | 内容 |
 | :--- | :--- |
 | `tests/` | シナリオ |
-| `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
+| `pages/` | 画面ごとの部品（Page Object）。文言（Notion の「4.1 UI/UX設計」から書き写す）と操作をまとめる。`flows.ts` は登録・ログインの流れ |
 | `support/` | TOTP の計算・次の30秒を待つ部品（`totp.ts`）、テストのデータ（`test-data.ts`）、fixture（`fixtures.ts`）。単体テストは `*.test.ts` |
 | `playwright.config.ts` | 対象の URL（環境変数）、端末（PC・スマホ）、やり直し・記録の設定 |
 | `.github/workflows/` | このリポジトリの PR の静的チェック（`pr.yml`） |
@@ -65,8 +65,10 @@ npx playwright install chromium
 3. このリポジトリで、テストを動かす。
 
    ```powershell
-   npm test
+   npm test -- --workers=1
    ```
+
+   - 手元の web に、いくつものテストを並べて動かすと、web が 10〜20秒止まり、テストが落ちることがある（2026-11-10 時点で調査中）。手元では `--workers=1` で1つずつ動かす。
 
 ### デプロイした環境に対して動かす
 
