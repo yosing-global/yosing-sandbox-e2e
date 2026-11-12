@@ -13,11 +13,23 @@ sandbox アプリの E2E テスト（Playwright・TypeScript）。
 
 | 場所 | 内容 |
 | :--- | :--- |
-| `tests/` | シナリオ |
+| `tests/` | シナリオ（E01〜E12）。機能分類ごとに1ファイル（下の「シナリオ」） |
 | `pages/` | 画面ごとの部品（Page Object）。文言（Notion の「4.1 UI/UX設計」から書き写す）と操作をまとめる。`flows.ts` は登録・ログインの流れ |
 | `support/` | TOTP の計算・次の30秒を待つ部品（`totp.ts`）、テストのデータ（`test-data.ts`）、fixture（`fixtures.ts`）。単体テストは `*.test.ts` |
 | `playwright.config.ts` | 対象の URL（環境変数）、端末（PC・スマホ）、やり直し・記録の設定 |
 | `.github/workflows/` | このリポジトリの PR の静的チェック（`pr.yml`） |
+
+## シナリオ
+
+シナリオの一覧（確かめること）は、Notion の E2E の設計が正。ID はその表の順に振り、ファイルは機能分類ごとに分ける。テストの名前は `<ID> <シナリオ>`（例：`npx playwright test -g E08` で1件だけ動かせる）。
+
+| 機能分類 | ファイル | シナリオ |
+| :--- | :--- | :--- |
+| 新規登録 | `tests/registration.spec.ts` | E01 新規登録、E07 ログイン ID が使われている、E12 スマホでのキーの表示 |
+| ログイン | `tests/login.spec.ts` | E03 ログイン、E05 ID かパスワードが違う、E06 コードが違う、E08 コードの誤りが続いた後、E09 別のタブでログインを始めた |
+| ログアウト・未ログイン | `tests/session.spec.ts` | E02 ログアウト、E10 未ログインでダッシュボードを開く |
+| 入力の形式の誤り | `tests/validation.spec.ts` | E04 入力の形式の誤り |
+| 存在しない URL | `tests/not-found.spec.ts` | E11 存在しない URL |
 
 ## 端末
 
@@ -68,7 +80,7 @@ npx playwright install chromium
    npm test -- --workers=1
    ```
 
-   - 手元の web に、いくつものテストを並べて動かすと、web が 10〜20秒止まり、テストが落ちることがある（2026-11-10 時点で調査中）。手元では `--workers=1` で1つずつ動かす。
+   - 手元の web に、いくつものテストを並べて動かすと、web が 10〜20秒止まり、テストが落ちることがある。dev（AWS）では並べても止まらないため、手元の環境（Windows）に限ったもの。手元では `--workers=1` で1つずつ動かす。
 
 ### デプロイした環境に対して動かす
 

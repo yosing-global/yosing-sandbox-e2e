@@ -40,6 +40,20 @@ export function infoNotice(page: Page): Locator {
   return page.getByRole("main").getByRole("status");
 }
 
+/**
+ * 送信のボタンを押し、送信（Server Action の POST）の応答まで待つ
+ * 続けて送る操作（コードを何度も間違える等）で、前の応答の前に次を入れないため
+ * 画面での事前の確認で送信しない操作（形式の誤り）には使わない（POST が無く、待ち続けるため）
+ */
+export async function clickAndWaitForSubmit(page: Page, button: Locator): Promise<void> {
+  const origin = new URL(page.url()).origin;
+  const response = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url().startsWith(origin),
+  );
+  await button.click();
+  await response;
+}
+
 /** URL のパスが一致するか（お知らせの理由の ?notice=… は付いていてもよい） */
 export function pathPattern(path: string): RegExp {
   const escaped = path.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");

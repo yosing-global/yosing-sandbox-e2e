@@ -1,6 +1,13 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { Authenticator } from "../support/totp";
-import { CODE_HINT, dangerNotice, pathPattern, tabTitle, visibleField } from "./common";
+import {
+  clickAndWaitForSubmit,
+  CODE_HINT,
+  dangerNotice,
+  pathPattern,
+  tabTitle,
+  visibleField,
+} from "./common";
 
 /** 新規登録（ステップ1：ログイン ID・パスワード） */
 export class RegisterPage {
@@ -45,7 +52,7 @@ export class RegisterPage {
   async submit(loginId: string, password: string): Promise<void> {
     await this.loginId.fill(loginId);
     await this.password.fill(password);
-    await this.nextButton.click();
+    await clickAndWaitForSubmit(this.page, this.nextButton);
   }
 }
 
@@ -107,6 +114,6 @@ export class RegisterSetupPage {
   /** コードを入れて「登録する」 */
   async submit(code: string): Promise<void> {
     await this.code.fill(code);
-    await this.registerButton.click();
+    await clickAndWaitForSubmit(this.page, this.registerButton);
   }
 }
