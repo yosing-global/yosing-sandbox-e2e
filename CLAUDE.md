@@ -4,7 +4,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## 状況（2026-11-13 時点）
 
-- 手順 1〜8 は済み（web・api の develop へのマージで、test に E2E が流れ、api の CI がテストのユーザーを掃除する）。test の排他はしないと決めた（下の「CI からの呼び出し」）。次は手順 9。
+- 手順 1〜9 は済み（E2E の作成と、web・api の CI への組み込み、テストのユーザーの掃除、README・Wiki の説明）。test の排他はしないと決めた（下の「CI からの呼び出し」）。次は stg・prod のインフラと、各アプリの CI の仕上げ。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
 - 作業の手順（web のリポジトリで整理した）：
 
@@ -18,7 +18,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。済み） | web・api から呼べる |
 | 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test。済み）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
 | 8 | web・api の `develop.yml` に `e2e`（test。排他はしない）、api に `cleanup`（テストのユーザーの掃除。登録から24時間を過ぎたものを消す。権限は `aws-infra-env`。済み） | develop へのマージで test に E2E が流れる |
-| 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
+| 9 | Wiki・README に E2E のことを書く（e2e・web・api。済み） | 説明がそろう |
 
 - 手順 2〜5 はこのリポジトリだけで進める。CI（6 以降）とは PR を分ける。
 - 手順 6 の `e2e.yml` は、呼ぶ側（web）が無いと動かせない。6 は静的チェックまでで develop に入れ、7 の web の PR で初めて動かして直す。
