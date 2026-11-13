@@ -4,7 +4,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## 状況（2026-11-12 時点）
 
-- 手順 1〜6 は済み。手順 7 は web の `pr.yml` まで済み（web の PR で E2E が全部通る）。`develop.yml` は手順 8 の test のロックと一緒に足す。次は手順 8。
+- 手順 1〜6 は済み。手順 7 は web の `pr.yml` まで済み（web の PR で E2E が全部通る）。`develop.yml` は手順 8 で足す。手順 8 は、掃除の権限（`aws-infra-env`）まで済み。test の排他はしないと決めた（下の「CI からの呼び出し」）。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
 - 作業の手順（web のリポジトリで整理した）：
 
@@ -17,7 +17,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
 | 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。済み） | web・api から呼べる |
 | 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境。済み。`develop.yml` は test。手順 8 と一緒に）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
-| 8 | test 環境のロック（`aws-infra-env` に DynamoDB のテーブルと権限）、api の `develop.yml` に `e2e` と `cleanup`（テストのユーザーの掃除） | develop へのマージで test に E2E が流れる |
+| 8 | web・api の `develop.yml` に `e2e`（test。排他はしない）、api に `cleanup`（テストのユーザーの掃除。権限は `aws-infra-env` に足した） | develop へのマージで test に E2E が流れる |
 | 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
 
 - 手順 2〜5 はこのリポジトリだけで進める。CI（6 以降）とは PR を分ける。
@@ -156,8 +156,11 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - `e2e.yml` は、テストのコードを、呼ばれたのと同じブランチの最新から取ってくる（ワークフローとテストのコードの版をそろえる。CI の Re-run でも、マージした後の新しいシナリオが使われるように）。
 - マージの順のずれで stg の E2E が落ちたときは、相手側をマージしてから流し直す。ずれている間は stg の E2E が赤のままで、本当の不具合を見逃しやすいので、ずれる時間を短くする（下の「git」の決まり）。
 - AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。ジョブに `environment:` を付けない（`sub` が変わる）。
-- ロールの ARN（アカウント ID を含む）は、呼ぶ側の Variables の値を、`e2e.yml` の **secret** として渡す（`secrets:` の側に書く）。secret の値はログで最初から伏せられる。入力（`with:`）や Variables のまま使うと、`::add-mask::` を行うステップ自身の `env:` の表示に元の値が出る（2026-11-12 に web の PR の実行で起きた）。アカウント ID だけの値は、`e2e.yml` の最初のステップで `::add-mask::` で伏せる。
-- test 環境の排他：デプロイから E2E の終わりまでを、web と api の間で直列にする（DynamoDB の条件付き書き込みのロック、期限付き）。テーブルと権限は `aws-infra-env` に足す。
+- ロールの ARN（アカウント ID を含む）は、呼ぶ側の Secrets の値を、`e2e.yml` の **secret** として渡す（`secrets:` の側に書く）。secret の値はログで最初から伏せられる。入力（`with:`）や Variables のまま使うと、`::add-mask::` を行うステップ自身の `env:` の表示に元の値が出る（2026-11-12 に web の PR の実行で起きた）。アカウント ID だけの値は、`e2e.yml` の最初のステップで `::add-mask::` で伏せる。
+- test 環境は、web と api の間で排他しない（2026-11-13 に決定。一度ロックを作りかけてやめた）。同じリポジトリの中は、呼ぶ側の `concurrency` で直列になる。
+  - 重なると、相手のデプロイの最中に E2E が流れて落ちることがある（実際には問題が無いのに落ちる）。やり直せば通る（CI の自動のやり直し1回、それでも落ちたら手で Re-run）。
+  - 誤って通る（どちらの E2E も、最後の組み合わせを最初から最後まで試していない）ことが理屈の上ではあるが、次のマージの E2E と stg の E2E が最後の組み合わせを試す。
+  - 理由：開発者は1人で、重なるのは近い時刻にマージしたときだけ。ロックは、リポジトリをまたぐ部品と Re-run の扱いで手間が大きい。別のサービスを作るときは、API の側を契約テストで守る形を考える。
 - このリポジトリ自身の PR では、静的チェック（整形・ESLint・型チェック・テストの一覧）、`support/` の単体テスト、ワークフローの書き方の確認（actionlint）だけを動かす（AWS にはつながない）。
 - 失敗したら、1回だけやり直す（CI のみ）。
 - 失敗したとき、トレースとスクリーンショットを成果物に残す（7日）。成果物とログは、呼ぶ側のリポジトリに残る。ログにパスワード・コード・キーを出さない。

@@ -17,7 +17,7 @@ name: e2e
 #       e2e_ref: develop
 #       e2e_app_client_id: ${{ vars.E2E_APP_CLIENT_ID }}
 #     secrets:
-#       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
+#       aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
 #       e2e_app_private_key: ${{ secrets.E2E_APP_PRIVATE_KEY }}
 on:
   workflow_call:
@@ -41,7 +41,7 @@ on:
       # ロールの ARN（アカウント ID を含む）は secret で受け取る。secret の値は、どのステップのログでも最初から伏せられる
       #   入力（inputs）や Variables で受け取ると、伏せる前のステップ（::add-mask:: を行うステップ自身の env の表示を含む）に、元の値が出てしまう
       aws_role_arn:
-        description: 呼ぶ側の CI ロールの ARN（呼ぶ側の Variables の値を、secrets として渡す）
+        description: 呼ぶ側の CI ロールの ARN（呼ぶ側の Secrets の値を、secrets として渡す）
         required: true
       e2e_app_private_key:
         description: e2e を読む GitHub App の秘密鍵
