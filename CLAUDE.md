@@ -2,9 +2,9 @@
 
 sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandbox は個人の学習とポートフォリオを兼ねたプロダクトで、最初の範囲は TOTP 認証（登録・ログイン）と、認証後のダッシュボード・ログアウト。画面と BFF は `yosing-sandbox-web`（Next.js）、API は `yosing-sandbox-api`（Spring Boot）。
 
-## 状況（2026-11-12 時点）
+## 状況（2026-11-13 時点）
 
-- 手順 1〜6 は済み。手順 7 は web の `pr.yml` まで済み（web の PR で E2E が全部通る）。`develop.yml` は手順 8 で足す。手順 8 は、掃除の権限（`aws-infra-env`）まで済み。test の排他はしないと決めた（下の「CI からの呼び出し」）。
+- 手順 1〜8 は済み（web・api の develop へのマージで、test に E2E が流れ、api の CI がテストのユーザーを掃除する）。test の排他はしないと決めた（下の「CI からの呼び出し」）。次は手順 9。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
 - 作業の手順（web のリポジトリで整理した）：
 
@@ -16,8 +16,8 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 4 | 画面ごとの部品（`pages/`。済み）：ログイン・新規登録・ダッシュボード・404。文言と操作をまとめる | シナリオから使える |
 | 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
 | 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。済み） | web・api から呼べる |
-| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境。済み。`develop.yml` は test。手順 8 と一緒に）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
-| 8 | web・api の `develop.yml` に `e2e`（test。排他はしない）、api に `cleanup`（テストのユーザーの掃除。権限は `aws-infra-env` に足した） | develop へのマージで test に E2E が流れる |
+| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test。済み）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
+| 8 | web・api の `develop.yml` に `e2e`（test。排他はしない）、api に `cleanup`（テストのユーザーの掃除。登録から24時間を過ぎたものを消す。権限は `aws-infra-env`。済み） | develop へのマージで test に E2E が流れる |
 | 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
 
 - 手順 2〜5 はこのリポジトリだけで進める。CI（6 以降）とは PR を分ける。
@@ -87,7 +87,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - ログイン ID：`e2e_dummy_` ＋ 時刻（36進数で9文字）＋ 乱数（36進数で6文字）＝25文字。小文字・数字・`_` だけ。テストごとの fixture の中で作る（ファイルの読み込み時や `beforeAll` では作らない）。固定の ID をテストに書かない。
 - `LOGIN_ID_TAKEN` が出ても、別の ID で黙ってやり直さない（E07 だけは、先に登録した ID をわざと使う）。
 - パスワード：`dummy` を含む決まった文字列（本物でないと分かるように）。
-- 作ったユーザーはテストの中では消さない。溜まったものは api の CI の `cleanup` で消す（手順 8）。
+- 作ったユーザーはテストの中では消さない。溜まったものは api の CI の `cleanup` で消す（develop へのマージのたびに、dev・test の、登録から24時間を過ぎた `e2e_dummy_` のユーザー。定期実行はしない）。
 
 ### 画面の部品の探し方
 
