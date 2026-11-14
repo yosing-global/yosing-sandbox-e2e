@@ -2,9 +2,9 @@
 
 sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandbox は個人の学習とポートフォリオを兼ねたプロダクトで、最初の範囲は TOTP 認証（登録・ログイン）と、認証後のダッシュボード・ログアウト。画面と BFF は `yosing-sandbox-web`（Next.js）、API は `yosing-sandbox-api`（Spring Boot）。
 
-## 状況（2026-11-12 時点）
+## 状況（2026-11-13 時点）
 
-- 手順 1〜5 は済み。シナリオ E01〜E12 が、手元（`--workers=1`）と dev（SSM。4つ並べても）で全部通る。次は手順 6。
+- 手順 1〜9 は済み（E2E の作成と、web・api の CI への組み込み、テストのユーザーの掃除、README・Wiki の説明）。test の排他はしないと決めた（下の「CI からの呼び出し」）。次は stg・prod のインフラと、各アプリの CI の仕上げ。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
 - 作業の手順（web のリポジトリで整理した）：
 
@@ -15,17 +15,17 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | 3 | 部品（`support/`。済み）：TOTP の計算・次の30秒を待つ部品・ログイン ID を作る部品（fixture）。単体テスト付き | テストのデータと認証コードを作れる |
 | 4 | 画面ごとの部品（`pages/`。済み）：ログイン・新規登録・ダッシュボード・404。文言と操作をまとめる | シナリオから使える |
 | 5 | シナリオ E01〜E12（済み）。まず手元（web・api を手元で起動）で通し、次に dev へ SSM でつないで通す | 手元と dev で全部通る |
-| 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す） | web・api から呼べる |
-| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test）。デプロイキーを作る | web の PR で E2E が動く |
-| 8 | test 環境のロック（`aws-infra-env` に DynamoDB のテーブルと権限）、api の `develop.yml` に `e2e` と `cleanup`（テストのユーザーの掃除） | develop へのマージで test に E2E が流れる |
-| 9 | Wiki・README に E2E のことを書く（e2e・web・api） | 説明がそろう |
+| 6 | 再利用できるワークフロー `e2e.yml`（SSM でつなぐ・1回だけやり直す・失敗の記録を残す。済み） | web・api から呼べる |
+| 7 | web の CI に `e2e` のジョブを足す（`pr.yml` は PR 環境、`develop.yml` は test。済み）。e2e を読む GitHub App（作成・登録済み） | web の PR で E2E が動く |
+| 8 | web・api の `develop.yml` に `e2e`（test。排他はしない）、api に `cleanup`（テストのユーザーの掃除。登録から24時間を過ぎたものを消す。権限は `aws-infra-env`。済み） | develop へのマージで test に E2E が流れる |
+| 9 | Wiki・README に E2E のことを書く（e2e・web・api。済み） | 説明がそろう |
 
 - 手順 2〜5 はこのリポジトリだけで進める。CI（6 以降）とは PR を分ける。
 - 手順 6 の `e2e.yml` は、呼ぶ側（web）が無いと動かせない。6 は静的チェックまでで develop に入れ、7 の web の PR で初めて動かして直す。
 - E2E の後は、stg / prod のインフラと各アプリの CI の仕上げ。リポジトリ・Wiki の一般公開は、全部を確かめた後の最後。
-- E2E で見つかった web の問題（web のリポジトリで直す。7 より前に直したい）：
-  - スマホで「ダッシュボード → ログアウト → ログイン → 同じタブでダッシュボード」と進むと、まれに React の誤り #185（Maximum update depth exceeded）でエラーの画面になる（手元で1回。dev では 28回流して起きていない）。隠れた画面を出し直す部品（`UnmountWhenHidden`・`ResetWhenHidden`・スマホのメニュー）の、layout effect の中の状態の変更が怪しい。
+- E2E で見つかった web の問題（web のリポジトリで直す）：
   - `npm run dev` では、ブラウザーが HMR につながるたびに `HMR hash mismatch` でページが読み直され続ける（Next.js 16.4.5）。16.4.6 で直るかを確かめる。
+  - 直したもの：スマホの「ダッシュボード → ログアウト → ログイン → ダッシュボード」で、まれに React の誤り #185 になる件（2026-11-12。原因は `UnmountWhenHidden` が出直すときの同期の更新と Suspense の繰り返し。詳細は web の CLAUDE.md）。
 - 手元の web に、いくつものテストを並べて動かすと、web が 10〜20秒止まることがある（CPU は使っていない。dev では起きない）。手元の Windows の環境に限ったものとして、手元では `--workers=1` で動かす。
 
 ## 公開の範囲
@@ -33,8 +33,9 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - 公開するのは、アプリのリポジトリ（web・api・e2e）とその Wiki。インフラのリポジトリ（`aws-infra-*`）は非公開のまま。Notion は非公開（最後に公開用の1ページを作り、README からリンクする）。
 - このリポジトリは、一般公開まで非公開（2026-11-10 に決定）。web・api の CI からは次の2つで使う。
   - このリポジトリの設定（Settings → Actions → Access）で、同じ organization のリポジトリからワークフローを使えるようにする。
-  - コードの取り込みはデプロイキー（このリポジトリだけを読める SSH の鍵。期限なし）。秘密鍵は web・api の Secrets に置き、`actions/checkout` の `ssh-key` で渡す。
-- 一般公開するときの片づけ：web・api のワークフローの `ssh-key` の行を消す → web・api の Secrets から鍵を消す → このリポジトリの Deploy keys から鍵を消す。
+  - コードの取り込みは、e2e を読む GitHub App（organization の App。このリポジトリだけにインストールし、権限は Contents の読み取りだけ。2026-11-12 に作成）。`e2e.yml` の中で `actions/create-github-app-token` により1時間だけ使えるトークンを作り、`actions/checkout` に渡す。web・api には、Variables に `E2E_APP_CLIENT_ID`、Secrets に `E2E_APP_PRIVATE_KEY` を置く。
+  - デプロイキーは使わない（organization のポリシーで使えないうえ、GitHub も App を勧めている。鍵に期限が無い）。
+- 一般公開するときの片づけ：web・api のワークフローの `e2e_app_client_id`・`e2e_app_private_key` の行を消す → web・api の Variables・Secrets から `E2E_APP_CLIENT_ID`・`E2E_APP_PRIVATE_KEY` を消す → GitHub App をアンインストールして消す（`e2e.yml` は、App の情報が無ければトークン無しで取ってくる）。
 - 公開する前提で書く：ファイル・コメント・ログに、アカウント ID・ロールの ARN・秘密の値を書かない。
 
 ## 設計の要点（詳細は Notion）
@@ -62,7 +63,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | E11 | 存在しない URL | 存在しない URL | 「ページが見つかりません」 | PC |
 | E12 | 新規登録 | スマホでのキーの表示 | 認証アプリの設定で「QR コードを読み取れない場合」が最初から開いている | スマホ |
 
-- ID は Notion の表の順（利用者の流れの順）。ファイルの分け方とは切り離す（作りを変えても ID は変えない）。新しいシナリオは、続きの番号（E13〜）を振る。
+- ID は Notion の表の順（利用者の流れの順）。ファイルの分け方とは切り離す（作りを変えても ID は変えない）。新しいシナリオは、続きの番号（E13〜）を振る。シナリオを足す・変えたら、Notion の E2E の設計と README の「シナリオ」の表の両方を直す（Notion は非公開のため、公開した後に読む人は README の表を見る）。
 - 機能分類1つにつき、テストのファイルを1つにする。テストの `describe` の名前は機能分類の名前、テストの名前は `<ID> <シナリオ>` にする（`npx playwright test -g E08` で1件だけ動かせる）。
 
 | 機能分類 | ファイル |
@@ -86,7 +87,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - ログイン ID：`e2e_dummy_` ＋ 時刻（36進数で9文字）＋ 乱数（36進数で6文字）＝25文字。小文字・数字・`_` だけ。テストごとの fixture の中で作る（ファイルの読み込み時や `beforeAll` では作らない）。固定の ID をテストに書かない。
 - `LOGIN_ID_TAKEN` が出ても、別の ID で黙ってやり直さない（E07 だけは、先に登録した ID をわざと使う）。
 - パスワード：`dummy` を含む決まった文字列（本物でないと分かるように）。
-- 作ったユーザーはテストの中では消さない。溜まったものは api の CI の `cleanup` で消す（手順 8）。
+- 作ったユーザーはテストの中では消さない。溜まったものは api の CI の `cleanup` で消す（develop へのマージのたびに、dev・test の、登録から24時間を過ぎた `e2e_dummy_` のユーザー。定期実行はしない）。
 
 ### 画面の部品の探し方
 
@@ -141,11 +142,15 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | :--- | :--- | :--- | :--- |
 | web の PR | web の PR 環境 `pr<番号>`（API は dev） | web | develop |
 | web・api の develop へのマージ | test | web・api | develop |
-| main へのマージ | stg（インフラ未作成。CloudFront の公開の入口から開く） | web・api | main |
+| main へのマージ | stg（CloudFront の公開の入口 `https://stg.sandbox.yosing.net`。Basic 認証あり） | web・api | main |
 
-- nonprod の URL は `https://<env>.local.sandbox.yosing.net:8090`（DNS は 127.0.0.1 を返す）。GitHub のランナー・手元から、SSM のポートフォワーディング（手元の 8090 → リバースプロキシの 443）でつなぐ。手順は web の Wiki の「環境別接続手順」、CI での作りは api・web の `.github/workflows/_deploy.yml` の `verify`（SSM でつないで `/api/health` を待つ）が手本。
+- nonprod の URL は `https://<env>.local.sandbox.yosing.net:8090`（DNS は 127.0.0.1 を返す）。GitHub のランナー・手元から、SSM のポートフォワーディング（手元の 8090 → リバースプロキシの 443）でつなぐ。手順は web の Wiki の「環境別接続手順」、CI での作りは `e2e.yml`（SSM でつないで `/api/health` を待つ）。
+- つなぎ方は、環境名ではなく、対象の環境の SSM パラメータの有無で決める（`e2e.yml` の「つなぎ方の決定」）。
+  - `/products/sandbox/web/public-url` があれば（stg / prod）、その URL に向けて流す。無ければ（nonprod）、SSM のポートフォワーディングで `https://<app_env>.local.sandbox.yosing.net:8090` に向けて流す。
+  - `/products/sandbox/basic-auth/username`・`password`（SecureString）があれば（stg）、Basic 認証を付ける（環境変数 `E2E_HTTP_USERNAME`・`E2E_HTTP_PASSWORD` → `playwright.config.ts` の `httpCredentials`）。パスワードは読んだらすぐに `::add-mask::` で伏せる。
+  - 手元から stg に流すときは、`E2E_BASE_URL`・`E2E_HTTP_USERNAME`・`E2E_HTTP_PASSWORD` を自分で入れる（パスワードは Stg の SSM の `/products/sandbox/basic-auth/password`）。
 - 証明書の誤りを無視する設定は使わない。
-- nonprod の稼働時間は毎日 9:00〜翌 1:00（JST）。外の時間は 502。
+- nonprod の ECS のタスクは、使うときに `aws-infra-env` の start（nonprod）で起動し、毎日 3:00（JST）に止まる。止まっていると 502。stg も同じく、ふだんは止めておき、start（stg）で起動する。
 - 手元：web（`http://localhost:3000`）は手元の API（`http://localhost:8080`）を呼ぶ。API は api のリポジトリで `docker compose up -d` → `.\gradlew.bat bootRun --args='--spring.profiles.active=local'`、web は `npm ci` → `npm run build` → 環境変数 `API_BASE_URL=http://localhost:8080`・`APP_ENV=local` を付けて `npx next start -p 3000`（本番モード）。`npm run dev` では、HMR のつなぎ直しのたびにページの読み直し（`HMR hash mismatch`）が繰り返され、E2E が落ちる（Next.js 16.4.5 で確認）。
 
 ### CI からの呼び出し
@@ -154,12 +159,15 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - 呼ぶ側は、対象の環境にデプロイされている web の版に合わせて参照する（E2E のシナリオは、その環境の web と合っている必要があるため）：PR 環境・dev・test は `@develop`、stg は `@main`（上の表の「呼ぶ E2E」）。api の CI も、同じ環境の web を相手にするので同じ参照にする。
 - `e2e.yml` は、テストのコードを、呼ばれたのと同じブランチの最新から取ってくる（ワークフローとテストのコードの版をそろえる。CI の Re-run でも、マージした後の新しいシナリオが使われるように）。
 - マージの順のずれで stg の E2E が落ちたときは、相手側をマージしてから流し直す。ずれている間は stg の E2E が赤のままで、本当の不具合を見逃しやすいので、ずれる時間を短くする（下の「git」の決まり）。
-- AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。ジョブに `environment:` を付けない（`sub` が変わる）。
-- アカウント ID・ロールの ARN は、呼ぶ側の GitHub の Variables から渡し、`::add-mask::` で伏せる。
-- test 環境の排他：デプロイから E2E の終わりまでを、web と api の間で直列にする（DynamoDB の条件付き書き込みのロック、期限付き）。テーブルと権限は `aws-infra-env` に足す。
-- このリポジトリ自身の PR では、静的チェック（型チェック・ESLint）だけを動かす（AWS にはつながない）。
+- AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、NonProd の両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。stg は Stg の CI ロール（呼ぶ側の `AWS_ROLE_ARN_STG`）で、SSM パラメータを読むだけ。ジョブに `environment:` を付けない（`sub` が変わる）。
+- ロールの ARN（アカウント ID を含む）は、呼ぶ側の Secrets の値を、`e2e.yml` の **secret** として渡す（`secrets:` の側に書く）。secret の値はログで最初から伏せられる。入力（`with:`）や Variables のまま使うと、`::add-mask::` を行うステップ自身の `env:` の表示に元の値が出る（2026-11-12 に web の PR の実行で起きた）。アカウント ID だけの値は、`e2e.yml` の最初のステップで `::add-mask::` で伏せる。
+- test 環境は、web と api の間で排他しない（2026-11-13 に決定。一度ロックを作りかけてやめた）。同じリポジトリの中は、呼ぶ側の `concurrency` で直列になる。
+  - 重なると、相手のデプロイの最中に E2E が流れて落ちることがある（実際には問題が無いのに落ちる）。やり直せば通る（CI の自動のやり直し1回、それでも落ちたら手で Re-run）。
+  - 誤って通る（どちらの E2E も、最後の組み合わせを最初から最後まで試していない）ことが理屈の上ではあるが、次のマージの E2E と stg の E2E が最後の組み合わせを試す。
+  - 理由：開発者は1人で、重なるのは近い時刻にマージしたときだけ。ロックは、リポジトリをまたぐ部品と Re-run の扱いで手間が大きい。別のサービスを作るときは、API の側を契約テストで守る形を考える。
+- このリポジトリ自身の PR では、静的チェック（整形・ESLint・型チェック・テストの一覧）、`support/` の単体テスト、ワークフローの書き方の確認（actionlint）だけを動かす（AWS にはつながない）。
 - 失敗したら、1回だけやり直す（CI のみ）。
-- 失敗したとき、トレースとスクリーンショットを成果物に残す（7日）。成果物とログは、呼ぶ側のリポジトリに残る。ログにパスワード・コード・キーを出さない。
+- 失敗したとき、トレースとスクリーンショットを成果物に残す（7日）。Basic 認証を付けるとき（stg）は、トレースを取らない（通信のヘッダーに `Authorization` が残り、成果物は公開する予定の呼ぶ側のリポジトリに残るため）。成果物とログは、呼ぶ側のリポジトリに残る。ログにパスワード・コード・キーを出さない。
 - 動画はふだん撮らない。デモ動画は、web の側に置く手動のワークフロー（`workflow_dispatch`）で撮る。
 
 ### リポジトリの作り
@@ -169,8 +177,9 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `tests/` | シナリオ（`login.spec.ts`・`registration.spec.ts` 等）。テストには、何を確かめるかを1文で書いたコメントを付ける |
 | `pages/` | 画面ごとの部品（Page Object）。文言と操作をまとめる |
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
-| `playwright.config.ts` | 対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
-| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`）、自身の PR の静的チェック |
+| `playwright.config.ts` | E2E の設定：対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
+| `playwright.unit.config.ts` | `support/` の単体テストの設定（`npm run test:unit`）。E2E と分ける（`npx playwright test`・`e2e.yml` では単体テストを動かさない） |
+| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`e2e_app_client_id`、secret は `aws_role_arn`・`e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`）、main へのマージの後の develop の早送り（`sync-develop.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
 
@@ -185,11 +194,11 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## 設計（Notion）
 
-「4.1 UI/UX設計」（文言の正）、「4.2 画面のURLとBFF」、「4.3 API設計」、「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」（E2E の設計）。テストのケースを足す・変えたら、E2E の設計のページも直す。
+「4.1 UI/UX設計」（文言の正）、「4.2 画面のURLとBFF」、「4.3 API設計」、「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」（E2E の設計）。テストのケースを足す・変えたら、E2E の設計のページと README の「シナリオ」の表も直す。
 
 ## git
 
-- ブランチは main・develop・作業ブランチ（2026-11-12 に develop を足すと決定）。web・api と同じく、develop ＝ 次に出るもの（PR 環境・dev・test の E2E が使う）、main ＝ 出ているもの（stg の E2E が使う）。
+- ブランチは main・develop・作業ブランチ（2026-11-12 に develop を足すと決定）。main へのマージの後に、`sync-develop.yml` が develop を main まで早送りする（GitHub App `yosing-global-sync-develop`。develop → main の PR は「マージコミット」でマージする）。web・api と同じく、develop ＝ 次に出るもの（PR 環境・dev・test の E2E が使う）、main ＝ 出ているもの（stg の E2E が使う）。
 - 作業ごとに `origin/develop` から新しいブランチを作り、作った後に `git branch --unset-upstream` を実行する。PR は develop に向けて出す。
 - web・api と対になる変更（文言・部品の名前・新しい機能のシナリオ等）は、相手の develop と同じ時期に develop にマージする。どちらを先にするかは、PR の「関連 PR」に書く。
 - web を main に出すときは、e2e も develop → main に出す。web と対になる変更が develop に残ったまま、e2e だけを先に main に出さない。
