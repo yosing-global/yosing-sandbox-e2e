@@ -142,11 +142,15 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | :--- | :--- | :--- | :--- |
 | web の PR | web の PR 環境 `pr<番号>`（API は dev） | web | develop |
 | web・api の develop へのマージ | test | web・api | develop |
-| main へのマージ | stg（インフラ未作成。CloudFront の公開の入口から開く） | web・api | main |
+| main へのマージ | stg（CloudFront の公開の入口 `https://stg.sandbox.yosing.net`。Basic 認証あり） | web・api | main |
 
-- nonprod の URL は `https://<env>.local.sandbox.yosing.net:8090`（DNS は 127.0.0.1 を返す）。GitHub のランナー・手元から、SSM のポートフォワーディング（手元の 8090 → リバースプロキシの 443）でつなぐ。手順は web の Wiki の「環境別接続手順」、CI での作りは api・web の `.github/workflows/_deploy.yml` の `verify`（SSM でつないで `/api/health` を待つ）が手本。
+- nonprod の URL は `https://<env>.local.sandbox.yosing.net:8090`（DNS は 127.0.0.1 を返す）。GitHub のランナー・手元から、SSM のポートフォワーディング（手元の 8090 → リバースプロキシの 443）でつなぐ。手順は web の Wiki の「環境別接続手順」、CI での作りは `e2e.yml`（SSM でつないで `/api/health` を待つ）。
+- つなぎ方は、環境名ではなく、対象の環境の SSM パラメータの有無で決める（`e2e.yml` の「つなぎ方の決定」）。
+  - `/products/sandbox/web/public-url` があれば（stg / prod）、その URL に向けて流す。無ければ（nonprod）、SSM のポートフォワーディングで `https://<app_env>.local.sandbox.yosing.net:8090` に向けて流す。
+  - `/products/sandbox/basic-auth/username`・`password`（SecureString）があれば（stg）、Basic 認証を付ける（環境変数 `E2E_HTTP_USERNAME`・`E2E_HTTP_PASSWORD` → `playwright.config.ts` の `httpCredentials`）。パスワードは読んだらすぐに `::add-mask::` で伏せる。
+  - 手元から stg に流すときは、`E2E_BASE_URL`・`E2E_HTTP_USERNAME`・`E2E_HTTP_PASSWORD` を自分で入れる（パスワードは Stg の SSM の `/products/sandbox/basic-auth/password`）。
 - 証明書の誤りを無視する設定は使わない。
-- nonprod の稼働時間は毎日 9:00〜翌 1:00（JST）。外の時間は 502。
+- nonprod の ECS のタスクは、使うときに `aws-infra-env` の start（nonprod）で起動し、毎日 3:00（JST）に止まる。止まっていると 502。stg も同じく、ふだんは止めておき、start（stg）で起動する。
 - 手元：web（`http://localhost:3000`）は手元の API（`http://localhost:8080`）を呼ぶ。API は api のリポジトリで `docker compose up -d` → `.\gradlew.bat bootRun --args='--spring.profiles.active=local'`、web は `npm ci` → `npm run build` → 環境変数 `API_BASE_URL=http://localhost:8080`・`APP_ENV=local` を付けて `npx next start -p 3000`（本番モード）。`npm run dev` では、HMR のつなぎ直しのたびにページの読み直し（`HMR hash mismatch`）が繰り返され、E2E が落ちる（Next.js 16.4.5 で確認）。
 
 ### CI からの呼び出し
@@ -155,7 +159,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 - 呼ぶ側は、対象の環境にデプロイされている web の版に合わせて参照する（E2E のシナリオは、その環境の web と合っている必要があるため）：PR 環境・dev・test は `@develop`、stg は `@main`（上の表の「呼ぶ E2E」）。api の CI も、同じ環境の web を相手にするので同じ参照にする。
 - `e2e.yml` は、テストのコードを、呼ばれたのと同じブランチの最新から取ってくる（ワークフローとテストのコードの版をそろえる。CI の Re-run でも、マージした後の新しいシナリオが使われるように）。
 - マージの順のずれで stg の E2E が落ちたときは、相手側をマージしてから流し直す。ずれている間は stg の E2E が赤のままで、本当の不具合を見逃しやすいので、ずれる時間を短くする（下の「git」の決まり）。
-- AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。ジョブに `environment:` を付けない（`sub` が変わる）。
+- AWS への認証は、呼ぶ側の CI ロール（`github-actions-sandbox-web-role` / `-api-role`）。OIDC の `sub` が呼ぶ側の契機になるため。SSM のポートフォワーディングの権限は、NonProd の両方の CI ロールに付いている（`aws-infra-env` の `products/sandbox/nonprod/iam.tf`）。stg は Stg の CI ロール（呼ぶ側の `AWS_ROLE_ARN_STG`）で、SSM パラメータを読むだけ。ジョブに `environment:` を付けない（`sub` が変わる）。
 - ロールの ARN（アカウント ID を含む）は、呼ぶ側の Secrets の値を、`e2e.yml` の **secret** として渡す（`secrets:` の側に書く）。secret の値はログで最初から伏せられる。入力（`with:`）や Variables のまま使うと、`::add-mask::` を行うステップ自身の `env:` の表示に元の値が出る（2026-11-12 に web の PR の実行で起きた）。アカウント ID だけの値は、`e2e.yml` の最初のステップで `::add-mask::` で伏せる。
 - test 環境は、web と api の間で排他しない（2026-11-13 に決定。一度ロックを作りかけてやめた）。同じリポジトリの中は、呼ぶ側の `concurrency` で直列になる。
   - 重なると、相手のデプロイの最中に E2E が流れて落ちることがある（実際には問題が無いのに落ちる）。やり直せば通る（CI の自動のやり直し1回、それでも落ちたら手で Re-run）。
@@ -163,7 +167,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
   - 理由：開発者は1人で、重なるのは近い時刻にマージしたときだけ。ロックは、リポジトリをまたぐ部品と Re-run の扱いで手間が大きい。別のサービスを作るときは、API の側を契約テストで守る形を考える。
 - このリポジトリ自身の PR では、静的チェック（整形・ESLint・型チェック・テストの一覧）、`support/` の単体テスト、ワークフローの書き方の確認（actionlint）だけを動かす（AWS にはつながない）。
 - 失敗したら、1回だけやり直す（CI のみ）。
-- 失敗したとき、トレースとスクリーンショットを成果物に残す（7日）。成果物とログは、呼ぶ側のリポジトリに残る。ログにパスワード・コード・キーを出さない。
+- 失敗したとき、トレースとスクリーンショットを成果物に残す（7日）。Basic 認証を付けるとき（stg）は、トレースを取らない（通信のヘッダーに `Authorization` が残り、成果物は公開する予定の呼ぶ側のリポジトリに残るため）。成果物とログは、呼ぶ側のリポジトリに残る。ログにパスワード・コード・キーを出さない。
 - 動画はふだん撮らない。デモ動画は、web の側に置く手動のワークフロー（`workflow_dispatch`）で撮る。
 
 ### リポジトリの作り
@@ -175,7 +179,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
 | `playwright.config.ts` | E2E の設定：対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
 | `playwright.unit.config.ts` | `support/` の単体テストの設定（`npm run test:unit`）。E2E と分ける（`npx playwright test`・`e2e.yml` では単体テストを動かさない） |
-| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`e2e_app_client_id`、secret は `aws_role_arn`・`e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`） |
+| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`e2e_app_client_id`、secret は `aws_role_arn`・`e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`）、main へのマージの後の develop の早送り（`sync-develop.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
 
@@ -194,7 +198,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## git
 
-- ブランチは main・develop・作業ブランチ（2026-11-12 に develop を足すと決定）。web・api と同じく、develop ＝ 次に出るもの（PR 環境・dev・test の E2E が使う）、main ＝ 出ているもの（stg の E2E が使う）。
+- ブランチは main・develop・作業ブランチ（2026-11-12 に develop を足すと決定）。main へのマージの後に、`sync-develop.yml` が develop を main まで早送りする（GitHub App `yosing-global-sync-develop`。develop → main の PR は「マージコミット」でマージする）。web・api と同じく、develop ＝ 次に出るもの（PR 環境・dev・test の E2E が使う）、main ＝ 出ているもの（stg の E2E が使う）。
 - 作業ごとに `origin/develop` から新しいブランチを作り、作った後に `git branch --unset-upstream` を実行する。PR は develop に向けて出す。
 - web・api と対になる変更（文言・部品の名前・新しい機能のシナリオ等）は、相手の develop と同じ時期に develop にマージする。どちらを先にするかは、PR の「関連 PR」に書く。
 - web を main に出すときは、e2e も develop → main に出す。web と対になる変更が develop に残ったまま、e2e だけを先に main に出さない。
