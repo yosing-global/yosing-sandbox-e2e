@@ -1,6 +1,10 @@
 name: e2e
 
-# 再利用できるワークフロー（呼ばれる側）：デプロイした環境に SSM でつなぎ、E2E を流す
+# 再利用できるワークフロー（呼ばれる側）：デプロイした環境につなぎ、E2E を流す
+#   つなぎ方は環境名ではなく、対象の環境の SSM パラメータの有無で決める
+#     /products/sandbox/web/public-url がある（stg / prod）：その URL（CloudFront の公開の入口）に向けて流す
+#     無い（nonprod）：SSM のポートフォワーディングでリバースプロキシにつなぎ、https://<app_env>.local.sandbox.yosing.net:8090 に向けて流す
+#     /products/sandbox/basic-auth/* がある（stg）：Basic 認証を付ける（パスワードは SecureString。読んだらすぐに伏せる）
 #   web・api の CI の deploy → verify の後ろの e2e のジョブから呼ぶ
 #   呼ぶ側のジョブで permissions（contents: read、id-token: write）を渡す。ジョブに environment: を付けない（OIDC の sub が変わる）
 #   呼ぶ側の参照は、対象の環境にデプロイされている web の版に合わせる（PR 環境・dev・test は @develop、stg は @main）
@@ -23,7 +27,7 @@ on:
   workflow_call:
     inputs:
       app_env:
-        description: 対象の環境（dev / test / pr<番号>）。URL の名前に使う
+        description: 対象の環境（dev / test / pr<番号> / stg）。nonprod の URL の名前に使う
         type: string
         required: true
       e2e_ref:
@@ -74,13 +78,13 @@ jobs:
         run: |
           echo "::add-mask::$(echo "${AWS_ROLE_ARN}" | cut -d: -f5)"
 
-      # 今は nonprod（SSM でつなぐ環境）だけ。stg（CloudFront の公開の入口）は、インフラができてから足す
+      # E2E を流す環境だけ（prod には流さない。テストのユーザーを作るため）
       - name: 入力の確認
         env:
           E2E_REF: ${{ inputs.e2e_ref }}
         run: |
-          if ! [[ "${APP_ENV}" =~ ^(dev|test|pr[0-9]+)$ ]]; then
-            echo "対象の環境が nonprod（dev / test / pr<番号>）ではない：${APP_ENV}"
+          if ! [[ "${APP_ENV}" =~ ^(dev|test|stg|pr[0-9]+)$ ]]; then
+            echo "対象の環境が dev / test / stg / pr<番号> ではない：${APP_ENV}"
             exit 1
           fi
           if [ -z "${E2E_REF}" ]; then
@@ -131,7 +135,50 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
 
+      # つなぎ方を決める（上の説明）。値が無い（ParameterNotFound）ときだけ空にし、それ以外の失敗（権限等）は失敗にする
+      #   値は変数に入れてから書く（echo "...$(...)" の形だと、取得の失敗でステップが止まらないため）
+      #   GITHUB_ENV に書いた値は、後ろのステップの環境変数になる（E2E_BASE_URL・E2E_HTTP_* は playwright.config.ts が読む）
+      - name: つなぎ方の決定（SSM パラメータ）
+        run: |
+          get_optional() {
+            if aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text 2> /tmp/ssm-error.log; then
+              return 0
+            fi
+            if grep --quiet ParameterNotFound /tmp/ssm-error.log; then
+              return 0
+            fi
+            cat /tmp/ssm-error.log >&2
+            return 1
+          }
+          public_url=$(get_optional /products/sandbox/web/public-url)
+          username=$(get_optional /products/sandbox/basic-auth/username)
+          password=$(get_optional /products/sandbox/basic-auth/password)
+          if [ -n "${password}" ]; then
+            echo "::add-mask::${password}"
+          fi
+          if [ -n "${public_url}" ]; then
+            echo "公開の入口につなぐ：${public_url}"
+            {
+              echo "E2E_BASE_URL=${public_url}"
+              echo "TUNNEL=false"
+            } >> "$GITHUB_ENV"
+          else
+            echo "SSM のポートフォワーディングでつなぐ"
+            {
+              echo "E2E_BASE_URL=https://${APP_ENV}.local.sandbox.yosing.net:8090"
+              echo "TUNNEL=true"
+            } >> "$GITHUB_ENV"
+          fi
+          if [ -n "${username}" ] && [ -n "${password}" ]; then
+            echo "Basic 認証を付ける（ユーザー：${username}）"
+            {
+              echo "E2E_HTTP_USERNAME=${username}"
+              echo "E2E_HTTP_PASSWORD=${password}"
+            } >> "$GITHUB_ENV"
+          fi
+
       - name: Session Manager のプラグインの導入
+        if: env.TUNNEL == 'true'
         run: |
           curl --fail --silent --show-error --location --output /tmp/session-manager-plugin.deb \
             "https://s3.amazonaws.com/session-manager-downloads/plugin/${SSM_PLUGIN_VERSION}/ubuntu_64bit/session-manager-plugin.deb"
@@ -141,6 +188,7 @@ jobs:
       # リバースプロキシ（NAT インスタンスに同居）の 443 を、ランナーの 8090 につなぐ（web・api の _deploy.yml の verify と同じ）
       #   インスタンス ID は作り直すと変わるため、Name タグで探す
       - name: ポートフォワーディングの開始
+        if: env.TUNNEL == 'true'
         run: |
           id=$(aws ec2 describe-instances \
             --filters Name=tag:Name,Values=nonprod-nat-ec2 Name=instance-state-name,Values=running \
@@ -161,12 +209,16 @@ jobs:
           cat /tmp/ssm-session.log
           exit 1
 
-      # 呼ぶ側の verify で確かめた後だが、つなぎ直したので、応答するまで待ってから流す
+      # 呼ぶ側の verify（VPC の中から確かめる）の後だが、E2E と同じ経路（公開の入口・ポートフォワーディング）で、応答するまで待ってから流す
       - name: ヘルスチェック
         run: |
-          url="https://${APP_ENV}.local.sandbox.yosing.net:8090/api/health"
+          url="${E2E_BASE_URL}/api/health"
+          auth=()
+          if [ -n "${E2E_HTTP_USERNAME:-}" ]; then
+            auth=(--user "${E2E_HTTP_USERNAME}:${E2E_HTTP_PASSWORD}")
+          fi
           for i in $(seq 1 24); do
-            body=$(curl --silent --show-error --max-time 10 "${url}" || true)
+            body=$(curl --silent --show-error --max-time 10 "${auth[@]}" "${url}" || true)
             if echo "${body}" | grep --quiet '"status":"UP"'; then
               echo "${url} → ${body}"
               exit 0
@@ -178,11 +230,13 @@ jobs:
           exit 1
 
       # CI では、失敗したテストを1回だけやり直す（playwright.config.ts の retries。CI=true は Actions が付ける）
+      #   URL・Basic 認証は、つなぎ方の決定で書いた環境変数（E2E_BASE_URL・E2E_HTTP_*）から playwright.config.ts が読む
       - name: E2E
-        run: E2E_BASE_URL="https://${APP_ENV}.local.sandbox.yosing.net:8090" npx playwright test
+        run: npx playwright test
 
       # 失敗したテストのトレース・スクリーンショット（HTML のレポートに含まれる）。成果物は呼ぶ側のリポジトリに残る
-      #   画面にダミーのユーザーのキーが写ることがあるが、nonprod はインターネットから入れないため許容する（Notion の E2E の設計の 9章）
+      #   画面にダミーのユーザーのキーが写ることがあるが、nonprod はインターネットから入れず、stg は Basic 認証で守っているため許容する（Notion の E2E の設計の 9章）
+      #   Basic 認証を付けるとき（stg）は、トレースを取らない（通信のヘッダーに Authorization が残るため。playwright.config.ts）
       - name: 結果の保存
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -192,5 +246,5 @@ jobs:
           retention-days: 7
 
       - name: ポートフォワーディングのログ
-        if: always()
+        if: always() && env.TUNNEL == 'true'
         run: cat /tmp/ssm-session.log || true
