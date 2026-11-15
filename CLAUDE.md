@@ -2,9 +2,11 @@
 
 sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandbox は個人の学習とポートフォリオを兼ねたプロダクトで、最初の範囲は TOTP 認証（登録・ログイン）と、認証後のダッシュボード・ログアウト。画面と BFF は `yosing-sandbox-web`（Next.js）、API は `yosing-sandbox-api`（Spring Boot）。
 
-## 状況（2026-11-13 時点）
+## 状況（2026-11-15 時点）
 
-- 手順 1〜9 は済み（E2E の作成と、web・api の CI への組み込み、テストのユーザーの掃除、README・Wiki の説明）。test の排他はしないと決めた（下の「CI からの呼び出し」）。次は stg・prod のインフラと、各アプリの CI の仕上げ。
+- 手順 1〜9 は済み（E2E の作成と、web・api の CI への組み込み、テストのユーザーの掃除、README・Wiki の説明）。test の排他はしないと決めた（下の「CI からの呼び出し」）。
+- stg の E2E も動く（2026-11-15。web・api の main へのマージで、`e2e.yml@main` が CloudFront の公開の入口に Basic 認証を付けて流す）。prod には流さない。
+- 残り：Notion の設計（E2E の設計の stg の接続・掃除）の更新、リポジトリ・Wiki の一般公開（全部を確かめた後の最後）。
 - E2E の設計は Notion の「6. テスト仕様」の「yosing-sandbox-e2e E2Eテスト」が正（Notion MCP で検索できる）。要点は下の「設計の要点」。
 - 作業の手順（web のリポジトリで整理した）：
 
