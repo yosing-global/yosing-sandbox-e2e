@@ -130,13 +130,15 @@ $env:E2E_BASE_URL = "https://dev.local.sandbox.yosing.net:8090"
 npm test
 ```
 
-- nonprod の稼働時間は毎日 9:00〜翌 1:00（JST）。外の時間は 502 になる。
+- nonprod のタスクは、ふだんは止めておき、使うときに起動する（毎日 3:00 JST に止まる）。止まっていると 502 になる。
+- stg に流すときは、`E2E_BASE_URL` に `https://stg.sandbox.yosing.net` を渡し、Basic 認証の `E2E_HTTP_USERNAME`・`E2E_HTTP_PASSWORD` も渡す（SSM のポートフォワーディングは要らない）。
 
 ### 環境変数
 
 | 名前 | 内容 | 既定 |
 | :--- | :--- | :--- |
 | `E2E_BASE_URL` | 対象の環境の URL | `http://localhost:3000` |
+| `E2E_HTTP_USERNAME`・`E2E_HTTP_PASSWORD` | 入口の Basic 認証（stg だけ）。渡すと、トレースを取らない（通信のヘッダーにパスワードが残るため） | 無し |
 | `CI` | CI で動かすとき（やり直し1回・`test.only` の禁止） | 無し |
 
 ## コマンド
@@ -157,13 +159,13 @@ npm test
 
 ## CI から呼ぶ（`e2e.yml`）
 
-web・api の CI の `deploy → verify` の後ろで、再利用できるワークフローとして呼ぶ。デプロイした環境に SSM でつなぎ、`/api/health` を待ってから流す。CI では、失敗したテストを1回だけやり直す。
+web・api の CI の `deploy → verify` の後ろで、再利用できるワークフローとして呼ぶ。デプロイした環境につなぎ、`/api/health` を待ってから流す。つなぎ方は、対象の環境の SSM パラメータで決まる（公開の URL があれば、その URL（stg。Basic 認証も付ける）、無ければ SSM のポートフォワーディング（nonprod））。CI では、失敗したテストを1回だけやり直す。
 
 | 契機 | 対象の環境 | 呼ぶ側 | 参照する E2E |
 | :--- | :--- | :--- | :--- |
 | web の PR | web の PR 環境 `pr<番号>`（API は dev） | web | `develop` |
 | web・api の `develop` へのマージ | test | web・api | `develop` |
-| `main` へのマージ | stg（まだ無い） | web・api | `main` |
+| `main` へのマージ | stg | web・api | `main` |
 
 - api の PR では E2E を流さない（api の変更は、develop へのマージの後の test の E2E で確かめる）。
 - test は、web と api の CI の両方が流す。両者の間で排他しないため、相手のデプロイの最中に流れて落ちることがある。そのときは流し直す（自動のやり直し1回、それでも落ちたら手で Re-run）。
@@ -186,9 +188,9 @@ e2e:
 
 | 入力 | 内容 |
 | :--- | :--- |
-| `app_env` | 対象の環境（`dev` / `test` / `pr<番号>`）。今は nonprod だけ（stg はインフラができてから足す） |
+| `app_env` | 対象の環境（`dev` / `test` / `pr<番号>` / `stg`）。prod には流さない |
 | `e2e_ref` | テストのコードを取ってくるブランチ。`uses` の `@` の後ろと同じにする |
-| `aws_role_arn`（secret） | 呼ぶ側の CI ロールの ARN。値は呼ぶ側の Secrets `AWS_ROLE_ARN` を、**`secrets:` の側に**書いて渡す（secret の値はログで最初から伏せられる。`with:` で渡すと、伏せる前のステップに元の値が出る） |
+| `aws_role_arn`（secret） | 呼ぶ側の CI ロールの ARN。値は呼ぶ側の Secrets `AWS_ROLE_ARN`（stg は `AWS_ROLE_ARN_STG`）を、**`secrets:` の側に**書いて渡す（secret の値はログで最初から伏せられる。`with:` で渡すと、伏せる前のステップに元の値が出る） |
 | `e2e_app_client_id` | このリポジトリを読む GitHub App の Client ID（呼ぶ側の Variables `E2E_APP_CLIENT_ID` から渡す）。このリポジトリを一般公開した後は要らない |
 | `e2e_app_private_key`（secret） | 同じ App の秘密鍵（呼ぶ側の Secrets `E2E_APP_PRIVATE_KEY`）。このリポジトリを一般公開した後は要らない |
 
@@ -196,4 +198,4 @@ e2e:
 
 - 参照するブランチは、対象の環境にデプロイされている web の版に合わせる：PR 環境・dev・test は `develop`、stg は `main`。
 - 呼ぶ側のジョブに `environment:` を付けない（OIDC の `sub` が変わり、CI ロールに入れなくなる）。
-- nonprod の稼働時間（9:00〜翌 1:00、JST）の外では、ヘルスチェックで落ちる。
+- 対象の環境のタスクが止まっていると、ヘルスチェックで落ちる（aws-infra-env の start で起動してから、流し直す）。
