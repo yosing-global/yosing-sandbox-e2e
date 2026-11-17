@@ -32,12 +32,10 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 
 ## 公開の範囲
 
-- 公開するのは、アプリのリポジトリ（web・api・e2e）とその Wiki。インフラのリポジトリ（`aws-infra-*`）は非公開のまま。Notion は非公開（最後に公開用の1ページを作り、README からリンクする）。
-- このリポジトリは、一般公開まで非公開（2026-11-10 に決定）。web・api の CI からは次の2つで使う。
-  - このリポジトリの設定（Settings → Actions → Access）で、同じ organization のリポジトリからワークフローを使えるようにする。
-  - コードの取り込みは、e2e を読む GitHub App（organization の App。このリポジトリだけにインストールし、権限は Contents の読み取りだけ。2026-11-12 に作成）。`e2e.yml` の中で `actions/create-github-app-token` により1時間だけ使えるトークンを作り、`actions/checkout` に渡す。web・api には、Variables に `E2E_APP_CLIENT_ID`、Secrets に `E2E_APP_PRIVATE_KEY` を置く。
+- 公開するのは、アプリのリポジトリ（web・api・e2e）とその Wiki。インフラのリポジトリ（`aws-infra-*`）は非公開のまま。Notion は非公開（公開用の1ページだけを Web で公開し、リポジトリの About の Website からリンクする）。
+- このリポジトリは 2026-11-17 に一般公開した。web・api の CI は、呼ぶ側のトークンでこのリポジトリのコードを取ってくる。
+  - 公開までは、e2e を読む GitHub App（yosing-sandbox-e2e-reader。Contents の読み取りだけ）のトークンで取ってきていた。公開時に `e2e.yml` の入力と、web・api の Variables・Secrets を削除した。App の登録は、今後の非公開リポジトリのために残している（インストールと秘密鍵は外す）。
   - デプロイキーは使わない（organization のポリシーで使えないうえ、GitHub も App を勧めている。鍵に期限が無い）。
-- 一般公開するときの片づけ：web・api のワークフローの `e2e_app_client_id`・`e2e_app_private_key` の行を消す → web・api の Variables・Secrets から `E2E_APP_CLIENT_ID`・`E2E_APP_PRIVATE_KEY` を消す → GitHub App をアンインストールして消す（`e2e.yml` は、App の情報が無ければトークン無しで取ってくる）。
 - 公開する前提で書く：ファイル・コメント・ログに、アカウント ID・ロールの ARN・秘密の値を書かない。
 
 ## 設計の要点（詳細は Notion）
@@ -181,7 +179,7 @@ sandbox の E2E テストのリポジトリ。Playwright（TypeScript）。sandb
 | `support/` | TOTP の計算・次の30秒を待つ部品、テストのデータを作る部品 |
 | `playwright.config.ts` | E2E の設定：対象の URL（環境変数で渡す）、端末（PC・スマホ）、やり直し・記録の設定 |
 | `playwright.unit.config.ts` | `support/` の単体テストの設定（`npm run test:unit`）。E2E と分ける（`npx playwright test`・`e2e.yml` では単体テストを動かさない） |
-| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`・`e2e_app_client_id`、secret は `aws_role_arn`・`e2e_app_private_key`）、自身の PR の静的チェック（`pr.yml`）、main へのマージの後の develop の早送り（`sync-develop.yml`） |
+| `.github/workflows/` | 再利用できるワークフロー（`e2e.yml`。入力は `app_env`・`e2e_ref`、secret は `aws_role_arn`）、自身の PR の静的チェック（`pr.yml`）、main へのマージの後の develop の早送り（`sync-develop.yml`） |
 
 - 言語は TypeScript。Node.js 24（web とそろえる）。
 
